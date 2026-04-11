@@ -629,7 +629,7 @@
       <span class="icon">🏦</span> จัดการบัญชีธนาคาร
     </div>
     <div class="nav-item" onclick="showPage('options')">
-      <span class="icon">📝</span> จัดการตัวเลือก
+      <span class="icon">👤</span> บัญชีธนาคารลูกค้า
     </div>
     <div class="nav-item" onclick="showPage('settings')">
       <span class="icon">⚙️</span> ตั้งค่าระบบ
@@ -714,16 +714,9 @@
           </div>
           <div class="form-group">
             <label class="form-label">รับจาก <span style="font-weight:400;color:var(--text-light)">(ธนาคารลูกค้า)</span> *</label>
-            <div class="sdrop-wrap" id="sdrop-from-wrap">
-              <button type="button" class="sdrop-trigger placeholder" id="sdrop-from-display" onclick="toggleSdrop('from')">— เลือก หรือพิมพ์ค้นหา —</button>
-              <span class="sdrop-arrow">▼</span>
-              <div class="sdrop-list" id="sdrop-from-list">
-                <div class="sdrop-search"><input type="text" id="sdrop-from-search" placeholder="🔍 ค้นหา..." oninput="filterSdrop('from')" onclick="event.stopPropagation()"></div>
-                <div id="sdrop-from-options"></div>
-                <div class="sdrop-option add-new" onclick="addFromSdrop()">＋ เพิ่มรายการใหม่...</div>
-              </div>
-            </div>
-            <input type="hidden" id="f-from">
+            <select class="form-input" id="f-from-select">
+              <option value="">— เลือกบัญชีลูกค้า —</option>
+            </select>
           </div>
           <div class="form-group">
             <label class="form-label">บัญชีธนาคาร <span style="font-weight:400;color:var(--text-light)">(ของเรา)</span> *</label>
@@ -805,16 +798,31 @@
 
     <!-- ===== OPTIONS ===== -->
     <div class="page" id="page-options">
+      <!-- Customer Accounts -->
       <div class="card" style="margin-bottom:20px">
-        <div class="card-header"><span class="card-title">จัดการ "รับจาก"</span></div>
-        <div style="padding:16px 24px">
-          <div id="opt-receivedfrom-list" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px"></div>
-          <div style="display:flex;gap:8px">
-            <input type="text" class="form-input" id="opt-rf-new" placeholder="เพิ่มรายการใหม่..." style="max-width:280px">
-            <button class="btn btn-primary" onclick="addOption('receivedFrom','opt-rf-new')">＋ เพิ่ม</button>
+        <div class="card-header"><span class="card-title">เพิ่มบัญชีธนาคารลูกค้า (รับจาก)</span></div>
+        <div style="padding:20px;display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end">
+          <div class="form-group">
+            <label class="form-label">ธนาคาร</label>
+            <input type="text" class="form-input" id="cust-bank" placeholder="KBANK, BBL, SCB, ...">
           </div>
+          <div class="form-group">
+            <label class="form-label">เลขที่บัญชี</label>
+            <input type="text" class="form-input" id="cust-number" placeholder="099-2-98523-2" maxlength="13" oninput="formatAccNumber(this)">
+          </div>
+          <button class="btn btn-primary" onclick="saveCustomerAccount()" style="height:42px">＋ เพิ่ม</button>
         </div>
       </div>
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-header">
+          <span class="card-title">บัญชีธนาคารลูกค้าทั้งหมด</span>
+          <button class="btn btn-outline btn-sm" onclick="loadCustomerAccounts()">↻ รีเฟรช</button>
+        </div>
+        <div id="customer-accounts-list-wrap">
+          <div class="empty-state"><div class="icon">👤</div><p>กำลังโหลด...</p></div>
+        </div>
+      </div>
+      <!-- Description Options -->
       <div class="card">
         <div class="card-header"><span class="card-title">จัดการ "รายการ / คำอธิบาย"</span></div>
         <div style="padding:16px 24px">
@@ -896,17 +904,16 @@ let COMPANY_TH = localStorage.getItem('companyTh') || 'บริษัท สา
 let COMPANY_EN = localStorage.getItem('companyEn') || 'SAMART CORPORATION PUBLIC COMPANY LIMITED';
 let allVouchers = [];
 let allAccounts = [];
+let allCustomerAccounts = [];
 let itemCount = 0;
 
-// Combo options — loaded from Sheets, fallback to localStorage
+// Combo options — description only (receivedFrom now uses CustomerAccounts sheet)
 let comboOptions = {
-  receivedFrom: JSON.parse(localStorage.getItem('combo_receivedFrom') || '["BBL","SCB","KTB","KBANK","GSB"]'),
-  description:  JSON.parse(localStorage.getItem('combo_description')  || '["รับคืนภาษีหัก ณ ที่จ่าย","ค่าธรรมเนียม","Service Fee","เงินรับล่วงหน้า"]')
+  description: JSON.parse(localStorage.getItem('combo_description') || '["รับคืนภาษีหัก ณ ที่จ่าย","ค่าธรรมเนียม","Service Fee","เงินรับล่วงหน้า"]')
 };
 
 function saveComboOptions(key) {
   localStorage.setItem('combo_' + key, JSON.stringify(comboOptions[key]));
-  // sync to Sheets if connected
   if (SCRIPT_URL) syncOptionsToSheet();
 }
 
@@ -915,10 +922,6 @@ async function loadOptionsFromSheet() {
   try {
     const res = await apiGet('getOptions');
     if (res.success && res.data) {
-      if (res.data.receivedFrom && res.data.receivedFrom.length) {
-        comboOptions.receivedFrom = res.data.receivedFrom;
-        localStorage.setItem('combo_receivedFrom', JSON.stringify(comboOptions.receivedFrom));
-      }
       if (res.data.description && res.data.description.length) {
         comboOptions.description = res.data.description;
         localStorage.setItem('combo_description', JSON.stringify(comboOptions.description));
@@ -931,7 +934,7 @@ async function loadOptionsFromSheet() {
 async function syncOptionsToSheet() {
   if (!SCRIPT_URL) return;
   try {
-    await api('saveOptions', { receivedFrom: comboOptions.receivedFrom, description: comboOptions.description });
+    await api('saveOptions', { description: comboOptions.description });
   } catch(e) { console.log('syncOptions error', e); }
 }
 
@@ -943,10 +946,10 @@ window.onload = () => {
   updateSidebarCompany();
   checkConfig();
   setDefaultDate();
-  renderSdropOptions('from', 'receivedFrom');
   addItem(); addItem();
   loadVouchers();
   loadAccounts();
+  loadCustomerAccounts();
   loadOptionsFromSheet();
 };
 
@@ -974,7 +977,7 @@ const pages = {
   dashboard: { title: 'รายการใบสำคัญทั้งหมด', sub: 'ค้นหาและจัดการใบสำคัญรับเงิน' },
   create: { title: 'สร้างใบสำคัญใหม่', sub: 'กรอกข้อมูลเพื่อบันทึกใบสำคัญรับเงิน' },
   accounts: { title: 'จัดการบัญชีธนาคาร', sub: 'เพิ่ม/แก้ไข/ลบบัญชีธนาคาร' },
-  options: { title: 'จัดการตัวเลือก', sub: 'แก้ไขรายการ "รับจาก" และ "รายการ/คำอธิบาย"' },
+  options: { title: 'บัญชีธนาคารลูกค้า', sub: 'จัดการบัญชีธนาคารลูกค้า (รับจาก) และรายการ/คำอธิบาย' },
   settings: { title: 'ตั้งค่าระบบ', sub: 'ตั้งค่าการเชื่อมต่อ Google Sheets' }
 };
 
@@ -991,7 +994,7 @@ function showPage(name) {
   document.getElementById('topbar-sub').textContent = pages[name].sub;
   if (name === 'dashboard') loadVouchers();
   if (name === 'accounts') loadAccounts();
-  if (name === 'options') renderOptionsPage();
+  if (name === 'options') { loadCustomerAccounts(); renderOptionsPage(); }
 }
 
 // ======== API (all GET to avoid CORS preflight from GitHub Pages) ========
@@ -1194,15 +1197,7 @@ function selectSdrop(uid, key, val) {
   if (list) list.classList.remove('open');
 }
 
-function addFromSdrop() {
-  document.querySelectorAll('.sdrop-list.open').forEach(l => l.classList.remove('open'));
-  const val = prompt('พิมพ์รายการใหม่:');
-  if (!val || !val.trim()) return;
-  const v = val.trim();
-  if (!comboOptions.receivedFrom.includes(v)) { comboOptions.receivedFrom.push(v); saveComboOptions('receivedFrom'); }
-  selectSdrop('from', 'receivedFrom', v);
-  renderOptionsPage();
-}
+function addFromSdrop() {} // no longer used - รับจาก now uses CustomerAccounts
 
 function addItemSdrop(uid) {
   document.querySelectorAll('.sdrop-list.open').forEach(l => l.classList.remove('open'));
@@ -1385,15 +1380,16 @@ function getItems() {
 async function saveVoucher() {
   const date = document.getElementById('f-date').value;
   const ref = document.getElementById('f-ref').value.trim();
-  const fromSel = document.getElementById('f-from');
-  const from = fromSel.value && fromSel.value !== '__add__' ? fromSel.value : '';
+  const fromCode = document.getElementById('f-from-select').value;
+  const fromAccount = allCustomerAccounts.find(a => a.code === fromCode);
+  const from = fromAccount ? `${fromAccount.bank} ${fromAccount.number}` : '';
   const accountCode = document.getElementById('f-account').value;
   const note = document.getElementById('f-note').value.trim();
   const items = getItems();
 
   if (!date) { showToast('กรุณาระบุวันที่', 'error'); return; }
-  if (!from) { showToast('กรุณาเลือก "รับจาก"', 'error'); return; }
-  if (!accountCode) { showToast('กรุณาเลือกบัญชีธนาคาร', 'error'); return; }
+  if (!fromCode) { showToast('กรุณาเลือกบัญชีลูกค้า (รับจาก)', 'error'); return; }
+  if (!accountCode) { showToast('กรุณาเลือกบัญชีธนาคาร (ของเรา)', 'error'); return; }
   if (!items.length) { showToast('กรุณาเพิ่มรายการอย่างน้อย 1 รายการ', 'error'); return; }
 
   // Check duplicate ref
@@ -1439,10 +1435,8 @@ async function saveVoucher() {
 }
 
 function resetForm() {
-  sdropState['from'] = null;
-  const btn = document.getElementById('sdrop-from-display');
-  if (btn) { btn.textContent = '— เลือก หรือพิมพ์ค้นหา —'; btn.classList.add('placeholder'); }
-  const h = document.getElementById('f-from'); if (h) h.value = '';
+  const fromSel = document.getElementById('f-from-select');
+  if (fromSel) fromSel.value = '';
   document.getElementById('f-account').value = '';
   document.getElementById('f-note').value = '';
   document.getElementById('items-tbody').innerHTML = '';
@@ -1518,7 +1512,119 @@ function populateAccountDropdown(data) {
   populateSourceAccountDropdown(data);
 }
 
-let editingAccountCode = null; // track which account is being edited
+// ======== CUSTOMER ACCOUNTS ========
+async function loadCustomerAccounts() {
+  const wrap = document.getElementById('customer-accounts-list-wrap');
+  if (!SCRIPT_URL) {
+    if (wrap) wrap.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div><p>กรุณาตั้งค่า Script URL ก่อน</p></div>';
+    return;
+  }
+  try {
+    const res = await apiGet('getCustomerAccounts');
+    if (res.success) {
+      allCustomerAccounts = res.data || [];
+      renderCustomerAccountsTable(allCustomerAccounts);
+      populateFromSelect(allCustomerAccounts);
+    }
+  } catch(e) {
+    if (wrap) wrap.innerHTML = `<div class="empty-state"><div class="icon">❌</div><p>${e.message}</p></div>`;
+  }
+}
+
+function renderCustomerAccountsTable(data) {
+  const wrap = document.getElementById('customer-accounts-list-wrap');
+  if (!wrap) return;
+  if (!data.length) {
+    wrap.innerHTML = '<div class="empty-state"><div class="icon">👤</div><p>ยังไม่มีบัญชีลูกค้า</p></div>';
+    return;
+  }
+  const rows = data.map(a => `
+    <tr>
+      <td><strong>${a.bank}</strong></td>
+      <td>${a.number}</td>
+      <td>${a.bank} ${a.number}</td>
+      <td>
+        <div class="action-btns">
+          <button class="btn btn-outline btn-sm" onclick="editCustomerAccount('${a.code}','${a.bank}','${a.number}')">✏️ แก้ไข</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteCustomerAccount('${a.code}')">🗑 ลบ</button>
+        </div>
+      </td>
+    </tr>`).join('');
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>ธนาคาร</th><th>เลขที่บัญชี</th><th>ป้ายกำกับ</th><th>จัดการ</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function populateFromSelect(data) {
+  const sel = document.getElementById('f-from-select');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— เลือกบัญชีลูกค้า —</option>';
+  data.forEach(a => {
+    const opt = document.createElement('option');
+    opt.value = a.code;
+    opt.textContent = `${a.bank} ${a.number}`;
+    if (a.code === cur) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+let editingCustomerCode = null;
+
+async function saveCustomerAccount() {
+  const bank = document.getElementById('cust-bank').value.trim();
+  const number = document.getElementById('cust-number').value.trim();
+  if (!bank || !number) { showToast('กรุณากรอกข้อมูลให้ครบ', 'error'); return; }
+  const code = (bank + '_' + number.replace(/-/g,'')).slice(0, 20);
+  try {
+    const res = await api('createCustomerAccount', { code, bank, number });
+    if (res.success) {
+      showToast('✅ เพิ่มบัญชีลูกค้าสำเร็จ', 'success');
+      document.getElementById('cust-bank').value = '';
+      document.getElementById('cust-number').value = '';
+      loadCustomerAccounts();
+    } else throw new Error(res.message);
+  } catch(e) { showToast('❌ ' + e.message, 'error'); }
+}
+
+function editCustomerAccount(code, bank, number) {
+  editingCustomerCode = code;
+  document.getElementById('cust-bank').value = bank;
+  document.getElementById('cust-number').value = number;
+  const btn = document.querySelector('[onclick="saveCustomerAccount()"]');
+  if (btn) { btn.textContent = '💾 บันทึก'; btn.onclick = updateCustomerAccount; }
+  window.scrollTo(0, 0);
+  showToast('กำลังแก้ไขบัญชี ' + bank, 'success');
+}
+
+async function updateCustomerAccount() {
+  const bank = document.getElementById('cust-bank').value.trim();
+  const number = document.getElementById('cust-number').value.trim();
+  if (!bank || !number) { showToast('กรุณากรอกข้อมูลให้ครบ', 'error'); return; }
+  try {
+    const res = await api('updateCustomerAccount', { code: editingCustomerCode, bank, number });
+    if (res.success) {
+      showToast('✅ แก้ไขบัญชีลูกค้าสำเร็จ', 'success');
+      editingCustomerCode = null;
+      document.getElementById('cust-bank').value = '';
+      document.getElementById('cust-number').value = '';
+      const btn = document.querySelector('[onclick="updateCustomerAccount()"]');
+      if (btn) { btn.textContent = '＋ เพิ่ม'; btn.onclick = saveCustomerAccount; }
+      loadCustomerAccounts();
+    } else throw new Error(res.message);
+  } catch(e) { showToast('❌ ' + e.message, 'error'); }
+}
+
+async function deleteCustomerAccount(code) {
+  if (!confirm('ยืนยันลบบัญชีลูกค้านี้?')) return;
+  try {
+    const res = await api('deleteCustomerAccount', { code });
+    if (res.success) { showToast('✅ ลบแล้ว', 'success'); loadCustomerAccounts(); }
+    else throw new Error(res.message);
+  } catch(e) { showToast('❌ ' + e.message, 'error'); }
+}
 
 async function saveAccount() {
   const bank = document.getElementById('acc-bank').value.trim();
@@ -1729,7 +1835,6 @@ function formatRef(val) {
 
 // ======== OPTIONS MANAGEMENT ========
 function renderOptionsPage() {
-  renderOptionTags('receivedFrom', 'opt-receivedfrom-list');
   renderOptionTags('description', 'opt-description-list');
 }
 
