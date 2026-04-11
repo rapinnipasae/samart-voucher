@@ -1455,6 +1455,20 @@ async function saveVoucher() {
   if (!accountCode) { showToast('กรุณาเลือกบัญชีธนาคาร', 'error'); return; }
   if (!items.length) { showToast('กรุณาเพิ่มรายการอย่างน้อย 1 รายการ', 'error'); return; }
 
+  // Check duplicate ref
+  if (ref) {
+    const duplicate = allVouchers.find(v => (v.voucherRef || '').trim().toLowerCase() === ref.toLowerCase());
+    if (duplicate) {
+      showToast(`❌ เลขที่ "${ref}" ซ้ำกับรายการที่มีอยู่แล้ว กรุณาแก้ไข`, 'error');
+      const refEl = document.getElementById('f-ref');
+      refEl.style.borderColor = 'var(--red)';
+      refEl.style.boxShadow = '0 0 0 3px rgba(192,57,43,0.15)';
+      refEl.focus(); refEl.select();
+      setTimeout(() => { refEl.style.borderColor = ''; refEl.style.boxShadow = ''; }, 3000);
+      return;
+    }
+  }
+
   const account = allAccounts.find(a => a.code === accountCode);
   const total = items.reduce((s, i) => s + i.amount, 0);
 
