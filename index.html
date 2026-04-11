@@ -494,6 +494,61 @@
 
   .divider { height: 1px; background: var(--border); margin: 24px 0; }
 
+  /* FILTER BAR */
+  .filter-bar {
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+    padding: 14px 24px; background: var(--cream);
+    border-bottom: 1px solid var(--border);
+  }
+  .filter-bar label { font-size: 12px; font-weight: 700; color: var(--text-mid); }
+  .filter-bar select, .filter-bar input[type=text] {
+    padding: 7px 12px; border: 1px solid var(--border);
+    border-radius: 8px; font-family: 'Sarabun', sans-serif;
+    font-size: 13px; background: white; outline: none;
+  }
+  .filter-bar select:focus, .filter-bar input:focus { border-color: var(--navy); }
+  .filter-count { margin-left: auto; font-size: 12px; color: var(--text-light); }
+
+  /* COMBOBOX (dropdown + add) */
+  .combo-wrap { width: 100%; }
+  .combo-select {
+    width: 100%; padding: 10px 14px;
+    border: 1px solid var(--border); border-radius: 8px;
+    font-family: 'Sarabun', sans-serif; font-size: 14px;
+    background: white; outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .combo-select:focus {
+    border-color: var(--navy);
+    box-shadow: 0 0 0 3px rgba(13,27,42,0.08);
+  }
+  .combo-new-row {
+    display: none; margin-top: 6px; gap: 6px; align-items: center;
+  }
+  .combo-new-row.show { display: flex; }
+  .combo-new-row input {
+    flex: 1; padding: 8px 12px;
+    border: 1px solid var(--gold); border-radius: 8px;
+    font-family: 'Sarabun', sans-serif; font-size: 13px; outline: none;
+  }
+  .combo-new-row button {
+    padding: 8px 14px; background: var(--gold); color: var(--navy);
+    border: none; border-radius: 8px;
+    font-family: 'Sarabun', sans-serif; font-size: 13px; font-weight: 700;
+    cursor: pointer; white-space: nowrap;
+  }
+  /* items combobox */
+  .item-desc-select {
+    width: 100%; padding: 7px 10px;
+    border: 1px solid transparent; border-radius: 6px;
+    font-family: 'Sarabun', sans-serif; font-size: 13px;
+    background: var(--cream); transition: all 0.2s;
+  }
+  .item-desc-select:focus {
+    outline: none; border-color: var(--navy);
+    background: white; box-shadow: 0 0 0 2px rgba(13,27,42,0.06);
+  }
+
   .tag-code {
     display: inline-block;
     background: var(--navy);
@@ -583,10 +638,27 @@
       <div class="card">
         <div class="card-header">
           <span class="card-title">รายการใบสำคัญ</span>
-          <div class="search-box">
-            <input type="text" id="search-input" placeholder="🔍 ค้นหา..." oninput="filterTable()">
-            <button class="btn btn-outline btn-sm" onclick="loadVouchers()">↻ รีเฟรช</button>
-          </div>
+          <button class="btn btn-outline btn-sm" onclick="loadVouchers()">↻ รีเฟรช</button>
+        </div>
+        <div class="filter-bar">
+          <label>ปี</label>
+          <select id="filter-year" onchange="applyFilters()">
+            <option value="">ทั้งหมด</option>
+          </select>
+          <label>เดือน</label>
+          <select id="filter-month" onchange="applyFilters()">
+            <option value="">ทั้งหมด</option>
+            <option value="1">มกราคม</option><option value="2">กุมภาพันธ์</option>
+            <option value="3">มีนาคม</option><option value="4">เมษายน</option>
+            <option value="5">พฤษภาคม</option><option value="6">มิถุนายน</option>
+            <option value="7">กรกฎาคม</option><option value="8">สิงหาคม</option>
+            <option value="9">กันยายน</option><option value="10">ตุลาคม</option>
+            <option value="11">พฤศจิกายน</option><option value="12">ธันวาคม</option>
+          </select>
+          <label>ค้นหา</label>
+          <input type="text" id="search-input" placeholder="เลขที่ / รับจาก ..." oninput="applyFilters()">
+          <button class="btn btn-outline btn-sm" onclick="clearFilters()">✕ ล้าง</button>
+          <span class="filter-count" id="filter-count"></span>
         </div>
         <div id="voucher-list-wrap">
           <div class="empty-state">
@@ -607,11 +679,20 @@
           </div>
           <div class="form-group">
             <label class="form-label">เลขที่ใบสำคัญ (Ref)</label>
-            <input type="text" class="form-input" id="f-ref" placeholder="เช่น 054/12/21">
+            <input type="text" class="form-input" id="f-ref" placeholder="สร้างอัตโนมัติ...">
+            <span style="font-size:11px;color:var(--text-light);margin-top:3px">สร้างให้อัตโนมัติ แก้ไขได้</span>
           </div>
           <div class="form-group">
             <label class="form-label">รับจาก *</label>
-            <input type="text" class="form-input" id="f-from" placeholder="เช่น BBL, SCB">
+            <div class="combo-wrap">
+              <select class="combo-select" id="f-from" onchange="handleComboChange('f-from','f-from-new-row')">
+                <option value="">— เลือก —</option>
+              </select>
+              <div class="combo-new-row" id="f-from-new-row">
+                <input type="text" id="f-from-new-val" placeholder="พิมพ์รายการใหม่...">
+                <button onclick="addComboOption('f-from','f-from-new-val','receivedFrom')">+ เพิ่ม</button>
+              </div>
+            </div>
           </div>
           <div class="form-group">
             <label class="form-label">บัญชีธนาคาร *</label>
@@ -669,7 +750,7 @@
         <div class="card-header">
           <span class="card-title">เพิ่มบัญชีธนาคาร</span>
         </div>
-        <div style="padding:20px;display:grid;grid-template-columns:100px 1fr 1fr 1fr auto;gap:12px;align-items:end">
+        <div style="padding:20px;display:grid;grid-template-columns:100px 1fr 1fr auto;gap:12px;align-items:end">
           <div class="form-group">
             <label class="form-label">รหัส</label>
             <input type="text" class="form-input" id="acc-code" placeholder="001">
@@ -681,13 +762,6 @@
           <div class="form-group">
             <label class="form-label">เลขที่บัญชี</label>
             <input type="text" class="form-input" id="acc-number" placeholder="xxx-x-xxxxx-x">
-          </div>
-          <div class="form-group">
-            <label class="form-label">ประเภท</label>
-            <select class="form-input" id="acc-type">
-              <option value="s/a">Savings (s/a)</option>
-              <option value="c/a">Current (c/a)</option>
-            </select>
           </div>
           <button class="btn btn-primary" onclick="saveAccount()" style="height:42px">＋ เพิ่ม</button>
         </div>
@@ -775,6 +849,16 @@ let allVouchers = [];
 let allAccounts = [];
 let itemCount = 0;
 
+// Combo options stored in localStorage
+let comboOptions = {
+  receivedFrom: JSON.parse(localStorage.getItem('combo_receivedFrom') || '["BBL","SCB","KTB","KBANK","GSB"]'),
+  description:  JSON.parse(localStorage.getItem('combo_description')  || '["รับคืนภาษีหัก ณ ที่จ่าย","ค่าธรรมเนียม","Service Fee","เงินรับล่วงหน้า"]')
+};
+
+function saveComboOptions(key) {
+  localStorage.setItem('combo_' + key, JSON.stringify(comboOptions[key]));
+}
+
 // ======== INIT ========
 window.onload = () => {
   document.getElementById('script-url-input').value = SCRIPT_URL;
@@ -783,7 +867,8 @@ window.onload = () => {
   updateSidebarCompany();
   checkConfig();
   setDefaultDate();
-  addItem(); addItem(); // default 2 rows
+  populateCombo('f-from', 'receivedFrom');
+  addItem(); addItem();
   loadVouchers();
   loadAccounts();
 };
@@ -804,6 +889,7 @@ function updateSidebarCompany() {
 function setDefaultDate() {
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('f-date').value = today;
+  generateRef();
 }
 
 // ======== NAVIGATION ========
@@ -861,7 +947,8 @@ async function loadVouchers() {
     const res = await apiGet('getVouchers');
     if (res.success) {
       allVouchers = res.data || [];
-      renderVoucherTable(allVouchers);
+      populateYearFilter(allVouchers);
+      applyFilters();
       updateStats(allVouchers);
       setSyncStatus('อัปเดตเมื่อ ' + new Date().toLocaleTimeString('th-TH'));
     } else throw new Error(res.message);
@@ -918,12 +1005,121 @@ function updateStats(data) {
   }
 }
 
-function filterTable() {
-  const q = document.getElementById('search-input').value.toLowerCase();
-  const filtered = allVouchers.filter(v =>
-    (v.voucherId + v.receivedFrom + v.voucherRef + (v.accountLabel || '')).toLowerCase().includes(q)
-  );
+function applyFilters() {
+  const year  = document.getElementById('filter-year').value;
+  const month = document.getElementById('filter-month').value;
+  const q     = (document.getElementById('search-input').value || '').toLowerCase();
+
+  const filtered = allVouchers.filter(v => {
+    const d = v.date ? new Date(v.date) : null;
+    if (year  && d && String(d.getFullYear()) !== year)  return false;
+    if (month && d && String(d.getMonth() + 1) !== month) return false;
+    if (q && !(v.voucherId + (v.voucherRef||'') + v.receivedFrom + (v.accountLabel||'')).toLowerCase().includes(q)) return false;
+    return true;
+  });
   renderVoucherTable(filtered);
+  document.getElementById('filter-count').textContent = `แสดง ${filtered.length} / ${allVouchers.length} รายการ`;
+}
+
+function clearFilters() {
+  document.getElementById('filter-year').value = '';
+  document.getElementById('filter-month').value = '';
+  document.getElementById('search-input').value = '';
+  applyFilters();
+}
+
+function populateYearFilter(data) {
+  const years = [...new Set(data.map(v => v.date ? new Date(v.date).getFullYear() : null).filter(Boolean))].sort((a,b)=>b-a);
+  const sel = document.getElementById('filter-year');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">ทั้งหมด</option>';
+  years.forEach(y => {
+    const o = document.createElement('option');
+    o.value = y; o.textContent = y + 543; // พ.ศ.
+    if (String(y) === cur) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+
+// ======== COMBOBOX ========
+function populateCombo(selectId, key) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— เลือก —</option>';
+  comboOptions[key].forEach(opt => {
+    const o = document.createElement('option');
+    o.value = opt; o.textContent = opt;
+    if (opt === cur) o.selected = true;
+    sel.appendChild(o);
+  });
+  const addOpt = document.createElement('option');
+  addOpt.value = '__add__'; addOpt.textContent = '+ เพิ่มรายการใหม่...';
+  sel.appendChild(addOpt);
+}
+
+function handleComboChange(selectId, newRowId) {
+  const sel = document.getElementById(selectId);
+  const row = document.getElementById(newRowId);
+  if (sel.value === '__add__') {
+    row.classList.add('show');
+    sel.value = '';
+  } else {
+    row.classList.remove('show');
+  }
+}
+
+function addComboOption(selectId, inputId, key) {
+  const input = document.getElementById(inputId);
+  const val = input.value.trim();
+  if (!val) return;
+  if (!comboOptions[key].includes(val)) {
+    comboOptions[key].push(val);
+    saveComboOptions(key);
+  }
+  populateCombo(selectId, key);
+  document.getElementById(selectId).value = val;
+  input.value = '';
+  const rowId = selectId + '-new-row';
+  const row = document.getElementById(rowId);
+  if (row) row.classList.remove('show');
+  // also re-render all item selects if description
+  if (key === 'description') refreshAllItemSelects();
+}
+
+function populateItemCombo(selectEl) {
+  const cur = selectEl.value;
+  selectEl.innerHTML = '<option value="">— เลือกรายการ —</option>';
+  comboOptions.description.forEach(opt => {
+    const o = document.createElement('option');
+    o.value = opt; o.textContent = opt;
+    if (opt === cur) o.selected = true;
+    selectEl.appendChild(o);
+  });
+  const addOpt = document.createElement('option');
+  addOpt.value = '__add__'; addOpt.textContent = '+ เพิ่มรายการใหม่...';
+  selectEl.appendChild(addOpt);
+}
+
+function refreshAllItemSelects() {
+  document.querySelectorAll('.item-desc-select').forEach(sel => populateItemCombo(sel));
+}
+
+function handleItemDescChange(sel, rowId) {
+  if (sel.value === '__add__') {
+    const newVal = prompt('พิมพ์รายการใหม่:');
+    if (newVal && newVal.trim()) {
+      const v = newVal.trim();
+      if (!comboOptions.description.includes(v)) {
+        comboOptions.description.push(v);
+        saveComboOptions('description');
+      }
+      refreshAllItemSelects();
+      sel.value = v;
+    } else {
+      sel.value = '';
+    }
+  }
 }
 
 // ======== ITEMS (FORM) ========
@@ -934,11 +1130,14 @@ function addItem() {
   tr.id = 'item-row-' + itemCount;
   tr.innerHTML = `
     <td style="text-align:center;color:var(--text-light);font-size:13px">${itemCount}</td>
-    <td><input type="text" placeholder="รายการ / คำอธิบาย" id="desc-${itemCount}"></td>
-    <td><input type="number" class="amount-input" placeholder="0.00" id="amt-${itemCount}" oninput="calcTotal()" step="0.01"></td>
+    <td>
+      <select class="item-desc-select" id="desc-${itemCount}" onchange="handleItemDescChange(this,${itemCount})"></select>
+    </td>
+    <td><input type="number" class="amount-input" placeholder="0.00" id="amt-${itemCount}" oninput="calcTotal()" step="0.01" min="0"></td>
     <td><button class="del-row" onclick="removeItem(${itemCount})">✕</button></td>
   `;
   tbody.appendChild(tr);
+  populateItemCombo(document.getElementById('desc-' + itemCount));
 }
 
 function removeItem(id) {
@@ -967,10 +1166,11 @@ function getItems() {
   const rows = document.querySelectorAll('#items-tbody tr');
   const items = [];
   rows.forEach(tr => {
-    const inputs = tr.querySelectorAll('input');
-    if (inputs.length >= 2) {
-      const desc = inputs[0].value.trim();
-      const amt = parseFloat(inputs[1].value) || 0;
+    const sel = tr.querySelector('select.item-desc-select');
+    const amtInp = tr.querySelector('input.amount-input');
+    if (sel && amtInp) {
+      const desc = sel.value === '__add__' ? '' : (sel.value || '');
+      const amt = parseFloat(amtInp.value) || 0;
       if (desc || amt) items.push({ description: desc, amount: amt });
     }
   });
@@ -981,13 +1181,14 @@ function getItems() {
 async function saveVoucher() {
   const date = document.getElementById('f-date').value;
   const ref = document.getElementById('f-ref').value.trim();
-  const from = document.getElementById('f-from').value.trim();
+  const fromSel = document.getElementById('f-from');
+  const from = fromSel.value && fromSel.value !== '__add__' ? fromSel.value : '';
   const accountCode = document.getElementById('f-account').value;
   const note = document.getElementById('f-note').value.trim();
   const items = getItems();
 
   if (!date) { showToast('กรุณาระบุวันที่', 'error'); return; }
-  if (!from) { showToast('กรุณาระบุ "รับจาก"', 'error'); return; }
+  if (!from) { showToast('กรุณาเลือก "รับจาก"', 'error'); return; }
   if (!accountCode) { showToast('กรุณาเลือกบัญชีธนาคาร', 'error'); return; }
   if (!items.length) { showToast('กรุณาเพิ่มรายการอย่างน้อย 1 รายการ', 'error'); return; }
 
@@ -996,7 +1197,7 @@ async function saveVoucher() {
 
   const payload = {
     date, ref, receivedFrom: from, accountCode,
-    accountLabel: account ? `${account.bank} ${account.type} ${account.number}` : accountCode,
+    accountLabel: account ? `${account.bank} ${account.number}` : accountCode,
     note, items, total
   };
 
@@ -1020,7 +1221,6 @@ async function saveVoucher() {
 }
 
 function resetForm() {
-  document.getElementById('f-ref').value = '';
   document.getElementById('f-from').value = '';
   document.getElementById('f-account').value = '';
   document.getElementById('f-note').value = '';
@@ -1029,6 +1229,15 @@ function resetForm() {
   addItem(); addItem();
   calcTotal();
   setDefaultDate();
+  generateRef();
+}
+
+function generateRef() {
+  const now = new Date();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const yy = String(now.getFullYear()).slice(-2);
+  const seq = String(allVouchers.length + 1).padStart(3, '0');
+  document.getElementById('f-ref').value = `${seq}/${mm}/${yy}`;
 }
 
 // ======== ACCOUNTS ========
@@ -1061,13 +1270,12 @@ function renderAccountsTable(data) {
       <td><span class="tag-code">${a.code}</span></td>
       <td><strong>${a.bank}</strong></td>
       <td>${a.number}</td>
-      <td>${a.type}</td>
-      <td>${a.bank} ${a.type} ${a.number}</td>
+      <td>${a.bank} ${a.number}</td>
     </tr>
   `).join('');
   wrap.innerHTML = `
     <table>
-      <thead><tr><th>รหัส</th><th>ธนาคาร</th><th>เลขที่บัญชี</th><th>ประเภท</th><th>ป้ายกำกับ</th></tr></thead>
+      <thead><tr><th>รหัส</th><th>ธนาคาร</th><th>เลขที่บัญชี</th><th>ป้ายกำกับ</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
 }
@@ -1079,7 +1287,7 @@ function populateAccountDropdown(data) {
   data.forEach(a => {
     const opt = document.createElement('option');
     opt.value = a.code;
-    opt.textContent = `[${a.code}] ${a.bank} ${a.type} ${a.number}`;
+    opt.textContent = `[${a.code}] ${a.bank} ${a.number}`;
     if (a.code === cur) opt.selected = true;
     sel.appendChild(opt);
   });
@@ -1089,10 +1297,9 @@ async function saveAccount() {
   const code = document.getElementById('acc-code').value.trim();
   const bank = document.getElementById('acc-bank').value.trim();
   const number = document.getElementById('acc-number').value.trim();
-  const type = document.getElementById('acc-type').value;
   if (!code || !bank || !number) { showToast('กรุณากรอกข้อมูลให้ครบ', 'error'); return; }
   try {
-    const res = await api('createAccount', { code, bank, number, type });
+    const res = await api('createAccount', { code, bank, number });
     if (res.success) {
       showToast('✅ เพิ่มบัญชีสำเร็จ', 'success');
       document.getElementById('acc-code').value = '';
