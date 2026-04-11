@@ -307,8 +307,10 @@
   }
   .items-header h3 { font-size: 14px; font-weight: 700; color: var(--navy); }
 
-  .items-table-wrap { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-  .items-table { width: 100%; border-collapse: collapse; }
+  .items-table-wrap { border: 1px solid var(--border); border-radius: 10px; overflow: visible; }
+  .items-table { width: 100%; border-collapse: collapse; border-radius: 10px; }
+  .items-table thead tr:first-child th:first-child { border-top-left-radius: 10px; }
+  .items-table thead tr:first-child th:last-child { border-top-right-radius: 10px; }
   .items-table thead th {
     background: var(--navy);
     color: rgba(255,255,255,0.8);
@@ -319,8 +321,9 @@
     text-transform: uppercase;
     border: none;
   }
-  .items-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  .items-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--border); position: relative; }
   .items-table tbody tr:last-child td { border-bottom: none; }
+  .sdrop-list { z-index: 1000; }
   .items-table input {
     width: 100%;
     padding: 7px 10px;
@@ -1223,7 +1226,7 @@ function addItem() {
       </div>
       <input type="hidden" id="desc-${itemCount}" class="item-desc-val">
     </td>
-    <td><input type="number" class="amount-input" placeholder="0.00" id="amt-${itemCount}" oninput="calcTotal()" step="0.01" min="0"></td>
+    <td><input type="text" inputmode="decimal" class="amount-input" placeholder="0.00" id="amt-${itemCount}" oninput="formatAmountInput(this)" style="text-align:right"></td>
     <td><button class="del-row" onclick="removeItem(${itemCount})">✕</button></td>
   `;
   tbody.appendChild(tr);
@@ -1244,10 +1247,35 @@ function renumberItems() {
   });
 }
 
+function formatAmountInput(input) {
+  // Remove non-numeric except dot
+  let raw = input.value.replace(/[^0-9.]/g, '');
+  // Allow only one dot
+  const parts = raw.split('.');
+  if (parts.length > 2) raw = parts[0] + '.' + parts.slice(1).join('');
+  // Store raw numeric value as data attribute
+  input.dataset.raw = raw;
+  // Format with commas
+  if (raw === '' || raw === '.') { input.value = raw; calcTotal(); return; }
+  const num = parseFloat(raw);
+  if (isNaN(num)) { input.value = ''; calcTotal(); return; }
+  // Keep trailing dot or zeros while typing
+  const hasDot = raw.includes('.');
+  const decimals = hasDot ? raw.split('.')[1] : '';
+  const intFormatted = Math.floor(num).toLocaleString('th-TH');
+  input.value = hasDot ? intFormatted + '.' + decimals : intFormatted;
+  calcTotal();
+}
+
+function parseAmountInput(input) {
+  const raw = (input.dataset.raw || input.value).replace(/,/g, '');
+  return parseFloat(raw) || 0;
+}
+
 function calcTotal() {
   let total = 0;
   document.querySelectorAll('.amount-input').forEach(inp => {
-    total += parseFloat(inp.value) || 0;
+    total += parseAmountInput(inp);
   });
   document.getElementById('total-display').textContent = formatNumber(total);
 }
@@ -1260,7 +1288,7 @@ function getItems() {
     const amtInp  = tr.querySelector('input.amount-input');
     if (descInp && amtInp) {
       const desc = descInp.value || '';
-      const amt  = parseFloat(amtInp.value) || 0;
+      const amt  = parseAmountInput(amtInp);
       if (desc || amt) items.push({ description: desc, amount: amt });
     }
   });
@@ -1488,7 +1516,7 @@ function previewVoucher(v) {
       <div class="v-meta"><strong>รายละเอียด :</strong></div>
       <div class="v-meta"><strong>วันที่รับเงิน : ${formatDateTHFull(v.date)}</strong></div>
       <div class="v-meta">รับจาก : ${v.receivedFrom}</div>
-      <div class="v-meta"></div>
+      <div class="v-meta">${v.accountLabel || ''}</div>
       <table>
         <thead>
           <tr><th>รายการ</th><th>จำนวนเงิน</th></tr>
