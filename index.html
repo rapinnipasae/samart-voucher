@@ -439,13 +439,16 @@
   .voucher-print table td.amt { text-align: right; }
   .voucher-print .v-total-row { background: #f8f8f8; font-weight: 700; }
   .voucher-print .v-sigs {
-    display: grid; grid-template-columns: 1fr 1fr 1fr;
-    gap: 16px; margin-top: 24px; font-size: 13px;
+    margin-top: 32px; font-size: 13px;
   }
-  .voucher-print .v-sig-box { text-align: center; }
+  .voucher-print .v-sig-box {
+    display: flex; align-items: center; gap: 16px;
+    margin-bottom: 32px;
+  }
+  .voucher-print .v-sig-label { width: 80px; text-align: right; flex-shrink: 0; }
   .voucher-print .v-sig-line {
-    border-bottom: 1px solid #333;
-    margin: 28px 16px 6px;
+    flex: 1; border-bottom: 1px solid #333;
+    min-width: 200px;
   }
 
   /* SECTION pages */
@@ -482,14 +485,14 @@
   @keyframes spin { to { transform: rotate(360deg); } }
 
   /* ===== PRINT CSS ===== */
+  @page { size: A4; margin: 15mm; }
   @media print {
     body * { visibility: hidden !important; }
     #print-area, #print-area * { visibility: visible !important; }
-    #print-area {
-      position: fixed; top: 0; left: 0;
-      width: 100%; padding: 20mm;
-    }
+    #print-area { position: fixed; top: 0; left: 0; width: 100%; }
     .modal-actions { display: none !important; }
+    .v-sigs { display: block !important; }
+    .v-sig-box { margin-bottom: 40px !important; }
   }
 
   .divider { height: 1px; background: var(--border); margin: 24px 0; }
@@ -509,19 +512,62 @@
   .filter-bar select:focus, .filter-bar input:focus { border-color: var(--navy); }
   .filter-count { margin-left: auto; font-size: 12px; color: var(--text-light); }
 
-  /* COMBOBOX (dropdown + add) */
-  .combo-wrap { width: 100%; }
-  .combo-select {
-    width: 100%; padding: 10px 14px;
+  /* SEARCHABLE DROPDOWN */
+  .sdrop-wrap { position: relative; width: 100%; }
+  .sdrop-input {
+    width: 100%; padding: 10px 36px 10px 14px;
     border: 1px solid var(--border); border-radius: 8px;
     font-family: 'Sarabun', sans-serif; font-size: 14px;
     background: white; outline: none;
     transition: border-color 0.2s, box-shadow 0.2s;
+    cursor: pointer;
   }
-  .combo-select:focus {
+  .sdrop-input:focus {
     border-color: var(--navy);
     box-shadow: 0 0 0 3px rgba(13,27,42,0.08);
   }
+  .sdrop-arrow {
+    position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+    pointer-events: none; color: var(--text-light); font-size: 12px;
+  }
+  .sdrop-list {
+    display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+    background: white; border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12); z-index: 999;
+    max-height: 220px; overflow-y: auto;
+  }
+  .sdrop-list.open { display: block; }
+  .sdrop-search {
+    padding: 10px 12px; border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; background: white;
+  }
+  .sdrop-search input {
+    width: 100%; padding: 6px 10px;
+    border: 1px solid var(--border); border-radius: 6px;
+    font-family: 'Sarabun', sans-serif; font-size: 13px; outline: none;
+  }
+  .sdrop-search input:focus { border-color: var(--navy); }
+  .sdrop-option {
+    padding: 9px 14px; font-size: 14px; cursor: pointer;
+    transition: background 0.1s;
+    font-family: 'Sarabun', sans-serif;
+  }
+  .sdrop-option:hover { background: var(--cream); }
+  .sdrop-option.selected { background: rgba(13,27,42,0.06); font-weight: 600; }
+  .sdrop-option.add-new {
+    color: var(--gold); font-weight: 600; border-top: 1px solid var(--border);
+    position: sticky; bottom: 0; background: white;
+  }
+  .sdrop-option.no-result { color: var(--text-light); font-style: italic; pointer-events: none; }
+
+  /* items searchable */
+  .sdrop-input.item-input {
+    padding: 7px 30px 7px 10px; font-size: 13px;
+    background: var(--cream); border-color: transparent;
+  }
+  .sdrop-input.item-input:focus { background: white; border-color: var(--navy); }
+
+  /* COMBOBOX add-new row */
   .combo-new-row {
     display: none; margin-top: 6px; gap: 6px; align-items: center;
   }
@@ -536,17 +582,6 @@
     border: none; border-radius: 8px;
     font-family: 'Sarabun', sans-serif; font-size: 13px; font-weight: 700;
     cursor: pointer; white-space: nowrap;
-  }
-  /* items combobox */
-  .item-desc-select {
-    width: 100%; padding: 7px 10px;
-    border: 1px solid transparent; border-radius: 6px;
-    font-family: 'Sarabun', sans-serif; font-size: 13px;
-    background: var(--cream); transition: all 0.2s;
-  }
-  .item-desc-select:focus {
-    outline: none; border-color: var(--navy);
-    background: white; box-shadow: 0 0 0 2px rgba(13,27,42,0.06);
   }
 
   .tag-code {
@@ -620,24 +655,6 @@
         </div>
       </div>
 
-      <div class="stats-row">
-        <div class="stat-card">
-          <div class="label">ใบสำคัญทั้งหมด</div>
-          <div class="value" id="stat-total">–</div>
-          <div class="sub">รายการในระบบ</div>
-        </div>
-        <div class="stat-card gold">
-          <div class="label">ยอดรวมเดือนนี้</div>
-          <div class="value" id="stat-month">–</div>
-          <div class="sub">บาท</div>
-        </div>
-        <div class="stat-card">
-          <div class="label">รายการล่าสุด</div>
-          <div class="value" id="stat-latest">–</div>
-          <div class="sub" id="stat-latest-date">–</div>
-        </div>
-      </div>
-
       <div class="card">
         <div class="card-header">
           <span class="card-title">รายการใบสำคัญ</span>
@@ -687,15 +704,16 @@
           </div>
           <div class="form-group">
             <label class="form-label">รับจาก *</label>
-            <div class="combo-wrap">
-              <select class="combo-select" id="f-from" onchange="handleComboChange('f-from','f-from-new-row')">
-                <option value="">— เลือก —</option>
-              </select>
-              <div class="combo-new-row" id="f-from-new-row">
-                <input type="text" id="f-from-new-val" placeholder="พิมพ์รายการใหม่...">
-                <button onclick="addComboOption('f-from','f-from-new-val','receivedFrom')">+ เพิ่ม</button>
+            <div class="sdrop-wrap" id="sdrop-from-wrap">
+              <input type="text" class="sdrop-input" id="f-from-display" placeholder="— เลือก หรือพิมพ์ค้นหา —" readonly onclick="toggleSdrop('from')" autocomplete="off">
+              <span class="sdrop-arrow">▼</span>
+              <div class="sdrop-list" id="sdrop-from-list">
+                <div class="sdrop-search"><input type="text" id="sdrop-from-search" placeholder="🔍 ค้นหา..." oninput="filterSdrop('from')" onclick="event.stopPropagation()"></div>
+                <div id="sdrop-from-options"></div>
+                <div class="sdrop-option add-new" onclick="addFromSdrop()">＋ เพิ่มรายการใหม่...</div>
               </div>
             </div>
+            <input type="hidden" id="f-from">
           </div>
           <div class="form-group">
             <label class="form-label">บัญชีธนาคาร *</label>
@@ -895,7 +913,7 @@ window.onload = () => {
   updateSidebarCompany();
   checkConfig();
   setDefaultDate();
-  populateCombo('f-from', 'receivedFrom');
+  renderSdropOptions('from', 'receivedFrom');
   addItem(); addItem();
   loadVouchers();
   loadAccounts();
@@ -1071,86 +1089,94 @@ function populateYearFilter(data) {
   });
 }
 
-// ======== COMBOBOX ========
-function populateCombo(selectId, key) {
-  const sel = document.getElementById(selectId);
-  if (!sel) return;
-  const cur = sel.value;
-  sel.innerHTML = '<option value="">— เลือก —</option>';
-  comboOptions[key].forEach(opt => {
-    const o = document.createElement('option');
-    o.value = opt; o.textContent = opt;
-    if (opt === cur) o.selected = true;
-    sel.appendChild(o);
-  });
-  const addOpt = document.createElement('option');
-  addOpt.value = '__add__'; addOpt.textContent = '+ เพิ่มรายการใหม่...';
-  sel.appendChild(addOpt);
+// ======== SEARCHABLE DROPDOWN ========
+let sdropState = {};
+
+function renderSdropOptions(uid, key, filter='') {
+  const wrap = document.getElementById('sdrop-' + uid + '-options');
+  if (!wrap) return;
+  const opts = (comboOptions[key] || []).filter(o => o.toLowerCase().includes(filter.toLowerCase()));
+  if (!opts.length) {
+    wrap.innerHTML = '<div class="sdrop-option no-result">ไม่พบรายการ</div>';
+    return;
+  }
+  const cur = sdropState[uid] && sdropState[uid].value;
+  wrap.innerHTML = opts.map(o => `
+    <div class="sdrop-option ${o===cur?'selected':''}" onclick="selectSdrop('${uid}','${key}','${o.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">
+      ${o}
+    </div>`).join('');
 }
 
-function handleComboChange(selectId, newRowId) {
-  const sel = document.getElementById(selectId);
-  const row = document.getElementById(newRowId);
-  if (sel.value === '__add__') {
-    row.classList.add('show');
-    sel.value = '';
+function toggleSdrop(uid) {
+  const list = document.getElementById('sdrop-' + uid + '-list');
+  if (!list) return;
+  const isOpen = list.classList.contains('open');
+  document.querySelectorAll('.sdrop-list.open').forEach(l => l.classList.remove('open'));
+  if (!isOpen) {
+    list.classList.add('open');
+    const search = document.getElementById('sdrop-' + uid + '-search');
+    if (search) { search.value = ''; setTimeout(()=>search.focus(),50); }
+    const key = uid === 'from' ? 'receivedFrom' : 'description';
+    renderSdropOptions(uid, key);
+  }
+}
+
+function filterSdrop(uid) {
+  const search = document.getElementById('sdrop-' + uid + '-search');
+  const key = uid === 'from' ? 'receivedFrom' : 'description';
+  if (search) renderSdropOptions(uid, key, search.value);
+}
+
+function selectSdrop(uid, key, val) {
+  sdropState[uid] = { key, value: val };
+  const display = document.getElementById('sdrop-' + uid + '-display');
+  if (display) display.value = val;
+  if (uid === 'from') {
+    const h = document.getElementById('f-from'); if (h) h.value = val;
   } else {
-    row.classList.remove('show');
+    const wrapEl = document.getElementById('sdrop-' + uid + '-wrap');
+    if (wrapEl) { const tr = wrapEl.closest('tr'); if (tr) { const h = tr.querySelector('.item-desc-val'); if (h) h.value = val; } }
   }
+  const list = document.getElementById('sdrop-' + uid + '-list');
+  if (list) list.classList.remove('open');
 }
 
-function addComboOption(selectId, inputId, key) {
-  const input = document.getElementById(inputId);
-  const val = input.value.trim();
-  if (!val) return;
-  if (!comboOptions[key].includes(val)) {
-    comboOptions[key].push(val);
-    saveComboOptions(key);
-  }
-  populateCombo(selectId, key);
-  document.getElementById(selectId).value = val;
-  input.value = '';
-  const rowId = selectId + '-new-row';
-  const row = document.getElementById(rowId);
-  if (row) row.classList.remove('show');
-  // also re-render all item selects if description
-  if (key === 'description') refreshAllItemSelects();
+function addFromSdrop() {
+  document.querySelectorAll('.sdrop-list.open').forEach(l => l.classList.remove('open'));
+  const val = prompt('พิมพ์รายการใหม่:');
+  if (!val || !val.trim()) return;
+  const v = val.trim();
+  if (!comboOptions.receivedFrom.includes(v)) { comboOptions.receivedFrom.push(v); saveComboOptions('receivedFrom'); }
+  selectSdrop('from', 'receivedFrom', v);
+  renderOptionsPage();
 }
 
-function populateItemCombo(selectEl) {
-  const cur = selectEl.value;
-  selectEl.innerHTML = '<option value="">— เลือกรายการ —</option>';
-  comboOptions.description.forEach(opt => {
-    const o = document.createElement('option');
-    o.value = opt; o.textContent = opt;
-    if (opt === cur) o.selected = true;
-    selectEl.appendChild(o);
-  });
-  const addOpt = document.createElement('option');
-  addOpt.value = '__add__'; addOpt.textContent = '+ เพิ่มรายการใหม่...';
-  selectEl.appendChild(addOpt);
+function addItemSdrop(uid) {
+  document.querySelectorAll('.sdrop-list.open').forEach(l => l.classList.remove('open'));
+  const val = prompt('พิมพ์รายการใหม่:');
+  if (!val || !val.trim()) return;
+  const v = val.trim();
+  if (!comboOptions.description.includes(v)) { comboOptions.description.push(v); saveComboOptions('description'); }
+  selectSdrop(uid, 'description', v);
+  refreshAllItemSelects();
+  renderOptionsPage();
 }
 
+document.addEventListener('click', e => {
+  if (!e.target.closest('.sdrop-wrap')) document.querySelectorAll('.sdrop-list.open').forEach(l => l.classList.remove('open'));
+});
+
+function populateCombo() {}
+function handleComboChange() {}
+function addComboOption() {}
+function populateItemCombo() {}
 function refreshAllItemSelects() {
-  document.querySelectorAll('.item-desc-select').forEach(sel => populateItemCombo(sel));
+  document.querySelectorAll('[id$="-options"]').forEach(el => {
+    const m = el.id.match(/^sdrop-(item\d+)-options$/);
+    if (m) renderSdropOptions(m[1], 'description');
+  });
 }
-
-function handleItemDescChange(sel, rowId) {
-  if (sel.value === '__add__') {
-    const newVal = prompt('พิมพ์รายการใหม่:');
-    if (newVal && newVal.trim()) {
-      const v = newVal.trim();
-      if (!comboOptions.description.includes(v)) {
-        comboOptions.description.push(v);
-        saveComboOptions('description');
-      }
-      refreshAllItemSelects();
-      sel.value = v;
-    } else {
-      sel.value = '';
-    }
-  }
-}
+function handleItemDescChange() {}
 
 // ======== ITEMS (FORM) ========
 function addItem() {
@@ -1158,16 +1184,26 @@ function addItem() {
   const tbody = document.getElementById('items-tbody');
   const tr = document.createElement('tr');
   tr.id = 'item-row-' + itemCount;
+  const uid = 'item' + itemCount;
   tr.innerHTML = `
     <td style="text-align:center;color:var(--text-light);font-size:13px">${itemCount}</td>
     <td>
-      <select class="item-desc-select" id="desc-${itemCount}" onchange="handleItemDescChange(this,${itemCount})"></select>
+      <div class="sdrop-wrap" id="sdrop-${uid}-wrap" style="position:relative">
+        <input type="text" class="sdrop-input item-input" id="sdrop-${uid}-display" placeholder="— เลือก หรือพิมพ์ —" readonly onclick="toggleSdrop('${uid}')" autocomplete="off">
+        <span class="sdrop-arrow" style="font-size:10px">▼</span>
+        <div class="sdrop-list" id="sdrop-${uid}-list">
+          <div class="sdrop-search"><input type="text" id="sdrop-${uid}-search" placeholder="🔍 ค้นหา..." oninput="filterSdrop('${uid}')" onclick="event.stopPropagation()"></div>
+          <div id="sdrop-${uid}-options"></div>
+          <div class="sdrop-option add-new" onclick="addItemSdrop('${uid}')">＋ เพิ่มรายการใหม่...</div>
+        </div>
+      </div>
+      <input type="hidden" id="desc-${itemCount}" class="item-desc-val">
     </td>
     <td><input type="number" class="amount-input" placeholder="0.00" id="amt-${itemCount}" oninput="calcTotal()" step="0.01" min="0"></td>
     <td><button class="del-row" onclick="removeItem(${itemCount})">✕</button></td>
   `;
   tbody.appendChild(tr);
-  populateItemCombo(document.getElementById('desc-' + itemCount));
+  renderSdropOptions(uid, 'description');
 }
 
 function removeItem(id) {
@@ -1196,11 +1232,11 @@ function getItems() {
   const rows = document.querySelectorAll('#items-tbody tr');
   const items = [];
   rows.forEach(tr => {
-    const sel = tr.querySelector('select.item-desc-select');
-    const amtInp = tr.querySelector('input.amount-input');
-    if (sel && amtInp) {
-      const desc = sel.value === '__add__' ? '' : (sel.value || '');
-      const amt = parseFloat(amtInp.value) || 0;
+    const descInp = tr.querySelector('.item-desc-val');
+    const amtInp  = tr.querySelector('input.amount-input');
+    if (descInp && amtInp) {
+      const desc = descInp.value || '';
+      const amt  = parseFloat(amtInp.value) || 0;
       if (desc || amt) items.push({ description: desc, amount: amt });
     }
   });
@@ -1251,7 +1287,9 @@ async function saveVoucher() {
 }
 
 function resetForm() {
-  document.getElementById('f-from').value = '';
+  sdropState['from'] = null;
+  const d = document.getElementById('sdrop-from-display'); if (d) d.value = '';
+  const h = document.getElementById('f-from'); if (h) h.value = '';
   document.getElementById('f-account').value = '';
   document.getElementById('f-note').value = '';
   document.getElementById('items-tbody').innerHTML = '';
@@ -1297,7 +1335,6 @@ function renderAccountsTable(data) {
   }
   const rows = data.map(a => `
     <tr id="acc-row-${a.code}">
-      <td><span class="tag-code">${a.code}</span></td>
       <td><strong>${a.bank}</strong></td>
       <td id="acc-num-${a.code}">${a.number}</td>
       <td>${a.bank} ${a.number}</td>
@@ -1311,7 +1348,7 @@ function renderAccountsTable(data) {
   `).join('');
   wrap.innerHTML = `
     <table>
-      <thead><tr><th>รหัส</th><th>ธนาคาร</th><th>เลขที่บัญชี</th><th>ป้ายกำกับ</th><th>จัดการ</th></tr></thead>
+      <thead><tr><th>ธนาคาร</th><th>เลขที่บัญชี</th><th>ป้ายกำกับ</th><th>จัดการ</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
 }
@@ -1323,7 +1360,7 @@ function populateAccountDropdown(data) {
   data.forEach(a => {
     const opt = document.createElement('option');
     opt.value = a.code;
-    opt.textContent = `[${a.code}] ${a.bank} ${a.number}`;
+    opt.textContent = `${a.bank} ${a.number}`;
     if (a.code === cur) opt.selected = true;
     sel.appendChild(opt);
   });
@@ -1444,18 +1481,9 @@ function previewVoucher(v) {
         </tbody>
       </table>
       <div class="v-sigs">
-        <div class="v-sig-box">
-          <div class="v-sig-line"></div>
-          <div>ผู้ขอ</div>
-        </div>
-        <div class="v-sig-box">
-          <div class="v-sig-line"></div>
-          <div>ผู้ตรวจสอบ</div>
-        </div>
-        <div class="v-sig-box">
-          <div class="v-sig-line"></div>
-          <div>ผู้อนุมัติ</div>
-        </div>
+        <div class="v-sig-box"><span class="v-sig-label">ผู้ขอ</span><div class="v-sig-line"></div></div>
+        <div class="v-sig-box"><span class="v-sig-label">ผู้ตรวจสอบ</span><div class="v-sig-line"></div></div>
+        <div class="v-sig-box"><span class="v-sig-label">ผู้อนุมัติ</span><div class="v-sig-line"></div></div>
       </div>
     </div>
   `;
@@ -1559,8 +1587,7 @@ function addOption(key, inputId) {
   if (!comboOptions[key].includes(val)) {
     comboOptions[key].push(val);
     saveComboOptions(key);
-    populateCombo('f-from', 'receivedFrom');
-    refreshAllItemSelects();
+    if (key === 'description') refreshAllItemSelects();
   }
   input.value = '';
   renderOptionsPage();
@@ -1572,8 +1599,7 @@ function removeOption(key, index) {
   if (!confirm('ลบ "' + val + '" ?')) return;
   comboOptions[key].splice(index, 1);
   saveComboOptions(key);
-  populateCombo('f-from', 'receivedFrom');
-  refreshAllItemSelects();
+  if (key === 'description') refreshAllItemSelects();
   renderOptionsPage();
   showToast('ลบตัวเลือกแล้ว', 'success');
 }
