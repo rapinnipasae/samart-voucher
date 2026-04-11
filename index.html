@@ -1401,17 +1401,23 @@ async function saveVoucher() {
   if (!items.length) { showToast('กรุณาเพิ่มรายการอย่างน้อย 1 รายการ', 'error'); return; }
 
   // Check duplicate ref (only for normal format - TR can repeat)
-  if (ref && refFormat === 'normal') {
-    const duplicate = allVouchers.find(v => (v.voucherRef || '').trim().toLowerCase() === ref.toLowerCase());
-    if (duplicate) {
-      showToast(`❌ เลขที่ "${ref}" ซ้ำกับรายการที่มีอยู่แล้ว กรุณาแก้ไข`, 'error');
-      const refEl = document.getElementById('f-ref');
-      refEl.style.borderColor = 'var(--red)';
-      refEl.style.boxShadow = '0 0 0 3px rgba(192,57,43,0.15)';
-      refEl.focus(); refEl.select();
-      setTimeout(() => { refEl.style.borderColor = ''; refEl.style.boxShadow = ''; }, 3000);
-      return;
-    }
+// Check duplicate ref (normal format ห้ามซ้ำ, TR ซ้ำได้)
+if (ref && refFormat === 'normal') {
+  const refNorm = ref.trim().toLowerCase();
+  const duplicate = allVouchers.find(v => {
+    const r = formatRef(v.voucherRef || '').trim().toLowerCase();
+    return r === refNorm;
+  });
+  if (duplicate) {
+    showToast(`❌ เลขที่ "${ref}" ซ้ำกับรายการที่มีอยู่แล้ว กรุณาแก้ไข`, 'error');
+    const refEl = document.getElementById('f-ref');
+    refEl.style.borderColor = 'var(--red)';
+    refEl.style.boxShadow = '0 0 0 3px rgba(192,57,43,0.15)';
+    refEl.focus(); refEl.select();
+    setTimeout(() => { refEl.style.borderColor = ''; refEl.style.boxShadow = ''; }, 3000);
+    return;
+  }
+}
   }
 
   const account = allAccounts.find(a => a.code === accountCode);
@@ -1878,22 +1884,15 @@ function bahtText(amount) {
 function formatRef(val) {
   if (!val) return '';
   const s = String(val).trim();
-  // Already correct normal format: 001/04/26
-  if (/^\d{3}\/\d{2}\/\d{2}$/.test(s)) return s;
-  // Already correct TR format: 04/2026
+  // Normal format: 001/04/26 ✅
+  if (/^\d{1,4}\/\d{2}\/\d{2}$/.test(s)) return s;
+  // TR format: 04/2026 ✅
   if (/^\d{2}\/\d{4}$/.test(s)) return s;
-  // Sheets returned YYYY/MM/DD (e.g. 2001/04/26 from "001/04/26") → show as MM/YYYY
-  if (/^\d{4}\/\d{2}\/\d{2}$/.test(s)) {
-    const p = s.split('/');
-    return p[1] + '/' + p[0]; // 04/2001 → shows origin month/year
-  }
-  // ISO date string from Sheets → MM/YYYY
-  if (/^\d{4}-\d{2}-\d{2}T/.test(s) || /^\d{4}-\d{2}-\d{2}$/.test(s)) {
+  // Sheets date string fallback: yyyy-MM-dd → MM/yyyy
+  if (/^\d{4}-\d{2}-\d{2}(T.*)?$/.test(s)) {
     const d = new Date(s);
     if (!isNaN(d)) return String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
   }
-  // MM/YYYY from Sheets date format
-  if (/^\d{2}\/\d{4}$/.test(s)) return s;
   return s;
 }
 
