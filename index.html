@@ -275,7 +275,7 @@
   .action-btns { display: flex; gap: 6px; }
 
   /* FORM */
-  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: end; }
   .form-group { display: flex; flex-direction: column; gap: 6px; }
   .form-group.full { grid-column: 1/-1; }
   .form-label {
@@ -1479,15 +1479,16 @@ function generateRef() {
     el.value = `${mm}/${yyyy}`;
   } else {
     const seq = getNextSeq();
-    el.value = `${seq}/${mm}/${yy}`;
+    el.value = `${seq}/${mm}/${yy}`;   // e.g. 001/04/26
   }
 }
 
 function getNextSeq() {
-  // Find max existing seq from allVouchers that match pattern NNN/MM/YY
   let max = 0;
   allVouchers.forEach(v => {
-    const m = (v.voucherRef || '').match(/^(\d+)\//);
+    const ref = formatRef(v.voucherRef || '');
+    // only count normal format refs: NNN/MM/YY
+    const m = ref.match(/^(\d{1,4})\/\d{2}\/\d{2}$/);
     if (m) max = Math.max(max, parseInt(m[1]));
   });
   return String(max + 1).padStart(3, '0');
@@ -1755,7 +1756,7 @@ function previewVoucher(v) {
         const dateStr = d && !isNaN(d)
           ? d.toLocaleDateString('th-TH', { day: 'numeric', month: 'numeric', year: 'numeric' })
           : (it.date || '');
-        return `<tr style="background:#fffde7"><td colspan="2" style="font-weight:700;color:#b8860b;padding:6px 12px">${dateStr}</td><td></td></tr>`;
+        return `<tr style="background:#f5f5f5"><td colspan="2" style="font-weight:700;color:#1a1a1a;padding:6px 12px">${dateStr}</td><td></td></tr>`;
       }
       return `<tr><td>${it.description || ''}</td><td></td><td class="amt">${it.amount ? formatNumber(it.amount) : ''}</td></tr>`;
     }).join('');
@@ -1795,7 +1796,7 @@ function previewVoucher(v) {
         <tbody>
           ${itemRowsHtml}
           <tr class="v-total-row">
-            <td colspan="${totalColspan}" style="text-align:right">${bahtText(v.total)}</td>
+            <td colspan="${totalColspan}" style="text-align:left">${bahtText(v.total)}</td>
             <td class="amt">${formatNumber(v.total)}</td>
           </tr>
         </tbody>
@@ -1877,14 +1878,22 @@ function bahtText(amount) {
 function formatRef(val) {
   if (!val) return '';
   const s = String(val).trim();
-  // Already in correct normal format: 001/04/26 or TR format: 04/2026 → keep as-is
-  if (/^\d{3}\/\d{2}\/\d{2}$/.test(s)) return s;   // normal: 001/04/26
-  if (/^\d{2}\/\d{4}$/.test(s)) return s;            // TR: 04/2026
-  // ISO date string (Sheets converted our ref to a Date) → format as MM/YYYY
+  // Already correct normal format: 001/04/26
+  if (/^\d{3}\/\d{2}\/\d{2}$/.test(s)) return s;
+  // Already correct TR format: 04/2026
+  if (/^\d{2}\/\d{4}$/.test(s)) return s;
+  // Sheets returned YYYY/MM/DD (e.g. 2001/04/26 from "001/04/26") → show as MM/YYYY
+  if (/^\d{4}\/\d{2}\/\d{2}$/.test(s)) {
+    const p = s.split('/');
+    return p[1] + '/' + p[0]; // 04/2001 → shows origin month/year
+  }
+  // ISO date string from Sheets → MM/YYYY
   if (/^\d{4}-\d{2}-\d{2}T/.test(s) || /^\d{4}-\d{2}-\d{2}$/.test(s)) {
     const d = new Date(s);
     if (!isNaN(d)) return String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
   }
+  // MM/YYYY from Sheets date format
+  if (/^\d{2}\/\d{4}$/.test(s)) return s;
   return s;
 }
 
