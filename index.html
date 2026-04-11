@@ -709,8 +709,12 @@
           </div>
           <div class="form-group">
             <label class="form-label">เลขที่ใบสำคัญ (Ref)</label>
+            <div style="display:flex;gap:6px;margin-bottom:6px">
+              <button type="button" id="ref-fmt-normal" class="btn btn-primary btn-sm" onclick="setRefFormat('normal')" title="รูปแบบ 001/12/26">📄 ปกติ</button>
+              <button type="button" id="ref-fmt-tr" class="btn btn-outline btn-sm" onclick="setRefFormat('tr')" title="รูปแบบ 12/2026">🔄 TR</button>
+            </div>
             <input type="text" class="form-input" id="f-ref" placeholder="สร้างอัตโนมัติ...">
-            <span style="font-size:11px;color:var(--text-light);margin-top:3px">สร้างให้อัตโนมัติ แก้ไขได้</span>
+            <span style="font-size:11px;color:var(--text-light);margin-top:3px" id="ref-hint">ปกติ: 001/เดือน/ปี — แก้ไขได้</span>
           </div>
           <div class="form-group">
             <label class="form-label">รับจาก <span style="font-weight:400;color:var(--text-light)">(ธนาคารลูกค้า)</span> *</label>
@@ -906,6 +910,7 @@ let allVouchers = [];
 let allAccounts = [];
 let allCustomerAccounts = [];
 let itemCount = 0;
+let refFormat = 'normal'; // 'normal' | 'tr'
 
 // Combo options — description only (receivedFrom now uses CustomerAccounts sheet)
 let comboOptions = {
@@ -969,7 +974,7 @@ function updateSidebarCompany() {
 function setDefaultDate() {
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('f-date').value = today;
-  generateRef();
+  setRefFormat(refFormat);
 }
 
 // ======== NAVIGATION ========
@@ -1392,8 +1397,8 @@ async function saveVoucher() {
   if (!accountCode) { showToast('กรุณาเลือกบัญชีธนาคาร (ของเรา)', 'error'); return; }
   if (!items.length) { showToast('กรุณาเพิ่มรายการอย่างน้อย 1 รายการ', 'error'); return; }
 
-  // Check duplicate ref
-  if (ref) {
+  // Check duplicate ref (only for normal format - TR can repeat)
+  if (ref && refFormat === 'normal') {
     const duplicate = allVouchers.find(v => (v.voucherRef || '').trim().toLowerCase() === ref.toLowerCase());
     if (duplicate) {
       showToast(`❌ เลขที่ "${ref}" ซ้ำกับรายการที่มีอยู่แล้ว กรุณาแก้ไข`, 'error');
@@ -1446,11 +1451,43 @@ function resetForm() {
   setDefaultDate();
 }
 
+function setRefFormat(fmt) {
+  refFormat = fmt;
+  const btnNormal = document.getElementById('ref-fmt-normal');
+  const btnTR     = document.getElementById('ref-fmt-tr');
+  const hint      = document.getElementById('ref-hint');
+  if (btnNormal) btnNormal.className = fmt === 'normal' ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
+  if (btnTR)     btnTR.className     = fmt === 'tr'     ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
+  if (hint) hint.textContent = fmt === 'tr'
+    ? 'TR: เดือน/ปี เช่น 12/2026 — แก้ไขได้'
+    : 'ปกติ: 001/เดือน/ปี — ห้ามซ้ำ แก้ไขได้';
+  generateRef();
+}
+
 function generateRef() {
   const now = new Date();
-  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const mm   = String(now.getMonth() + 1).padStart(2, '0');
+  const yy   = String(now.getFullYear()).slice(-2);
   const yyyy = now.getFullYear();
-  document.getElementById('f-ref').value = `${mm}/${yyyy}`;
+  const el = document.getElementById('f-ref');
+  if (!el) return;
+  if (refFormat === 'tr') {
+    el.value = `${mm}/${yyyy}`;
+  } else {
+    // sequential: find next unused number
+    const seq = getNextSeq();
+    el.value = `${seq}/${mm}/${yy}`;
+  }
+}
+
+function getNextSeq() {
+  // Find max existing seq from allVouchers that match pattern NNN/MM/YY
+  let max = 0;
+  allVouchers.forEach(v => {
+    const m = (v.voucherRef || '').match(/^(\d+)\//);
+    if (m) max = Math.max(max, parseInt(m[1]));
+  });
+  return String(max + 1).padStart(3, '0');
 }
 
 // ======== ACCOUNTS ========
