@@ -583,6 +583,9 @@
     <div class="nav-item" onclick="showPage('accounts')">
       <span class="icon">🏦</span> จัดการบัญชีธนาคาร
     </div>
+    <div class="nav-item" onclick="showPage('options')">
+      <span class="icon">📝</span> จัดการตัวเลือก
+    </div>
     <div class="nav-item" onclick="showPage('settings')">
       <span class="icon">⚙️</span> ตั้งค่าระบบ
     </div>
@@ -761,7 +764,8 @@
           </div>
           <div class="form-group">
             <label class="form-label">เลขที่บัญชี</label>
-            <input type="text" class="form-input" id="acc-number" placeholder="xxx-x-xxxxx-x">
+            <input type="text" class="form-input" id="acc-number" placeholder="101-1-01010-1" maxlength="13" oninput="formatAccNumber(this)">
+            <span style="font-size:11px;color:var(--text-light);margin-top:2px">รูปแบบ xxx-x-xxxxx-x</span>
           </div>
           <button class="btn btn-primary" onclick="saveAccount()" style="height:42px">＋ เพิ่ม</button>
         </div>
@@ -774,6 +778,30 @@
         </div>
         <div id="accounts-list-wrap">
           <div class="empty-state"><div class="icon">🏦</div><p>กำลังโหลด...</p></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== OPTIONS ===== -->
+    <div class="page" id="page-options">
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-header"><span class="card-title">จัดการ "รับจาก"</span></div>
+        <div style="padding:16px 24px">
+          <div id="opt-receivedfrom-list" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px"></div>
+          <div style="display:flex;gap:8px">
+            <input type="text" class="form-input" id="opt-rf-new" placeholder="เพิ่มรายการใหม่..." style="max-width:280px">
+            <button class="btn btn-primary" onclick="addOption('receivedFrom','opt-rf-new')">＋ เพิ่ม</button>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">จัดการ "รายการ / คำอธิบาย"</span></div>
+        <div style="padding:16px 24px">
+          <div id="opt-description-list" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px"></div>
+          <div style="display:flex;gap:8px">
+            <input type="text" class="form-input" id="opt-desc-new" placeholder="เพิ่มรายการใหม่..." style="max-width:280px">
+            <button class="btn btn-primary" onclick="addOption('description','opt-desc-new')">＋ เพิ่ม</button>
+          </div>
         </div>
       </div>
     </div>
@@ -896,7 +924,8 @@ function setDefaultDate() {
 const pages = {
   dashboard: { title: 'รายการใบสำคัญทั้งหมด', sub: 'ค้นหาและจัดการใบสำคัญรับเงิน' },
   create: { title: 'สร้างใบสำคัญใหม่', sub: 'กรอกข้อมูลเพื่อบันทึกใบสำคัญรับเงิน' },
-  accounts: { title: 'จัดการบัญชีธนาคาร', sub: 'เพิ่ม/แก้ไขรหัสบัญชีธนาคาร' },
+  accounts: { title: 'จัดการบัญชีธนาคาร', sub: 'เพิ่ม/แก้ไข/ลบบัญชีธนาคาร' },
+  options: { title: 'จัดการตัวเลือก', sub: 'แก้ไขรายการ "รับจาก" และ "รายการ/คำอธิบาย"' },
   settings: { title: 'ตั้งค่าระบบ', sub: 'ตั้งค่าการเชื่อมต่อ Google Sheets' }
 };
 
@@ -913,6 +942,7 @@ function showPage(name) {
   document.getElementById('topbar-sub').textContent = pages[name].sub;
   if (name === 'dashboard') loadVouchers();
   if (name === 'accounts') loadAccounts();
+  if (name === 'options') renderOptionsPage();
 }
 
 // ======== API (all GET to avoid CORS preflight from GitHub Pages) ========
@@ -965,7 +995,7 @@ function renderVoucherTable(data) {
   }
   const rows = data.map(v => `
     <tr>
-      <td><span class="tag-code">${v.voucherRef || v.voucherId}</span></td>
+      <td><span class="tag-code">${formatRef(v.voucherRef || v.voucherId)}</span></td>
       <td>${formatDateTH(v.date)}</td>
       <td>${v.receivedFrom}</td>
       <td>${v.accountLabel || ''}</td>
@@ -1266,16 +1296,22 @@ function renderAccountsTable(data) {
     return;
   }
   const rows = data.map(a => `
-    <tr>
+    <tr id="acc-row-${a.code}">
       <td><span class="tag-code">${a.code}</span></td>
       <td><strong>${a.bank}</strong></td>
-      <td>${a.number}</td>
+      <td id="acc-num-${a.code}">${a.number}</td>
       <td>${a.bank} ${a.number}</td>
+      <td>
+        <div class="action-btns">
+          <button class="btn btn-outline btn-sm" onclick="editAccount('${a.code}','${a.bank}','${a.number}')">✏️ แก้ไข</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteAccount('${a.code}')">🗑 ลบ</button>
+        </div>
+      </td>
     </tr>
   `).join('');
   wrap.innerHTML = `
     <table>
-      <thead><tr><th>รหัส</th><th>ธนาคาร</th><th>เลขที่บัญชี</th><th>ป้ายกำกับ</th></tr></thead>
+      <thead><tr><th>รหัส</th><th>ธนาคาร</th><th>เลขที่บัญชี</th><th>ป้ายกำกับ</th><th>จัดการ</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
 }
@@ -1310,7 +1346,64 @@ async function saveAccount() {
   } catch (e) { showToast('❌ ' + e.message, 'error'); }
 }
 
-// ======== PRINT ========
+function formatAccNumber(input) {
+  let v = input.value.replace(/\D/g, '').slice(0, 10);
+  let out = '';
+  if (v.length > 0) out += v.slice(0,3);
+  if (v.length > 3) out += '-' + v.slice(3,4);
+  if (v.length > 4) out += '-' + v.slice(4,9);
+  if (v.length > 9) out += '-' + v.slice(9,10);
+  input.value = out;
+}
+
+function editAccount(code, bank, number) {
+  document.getElementById('acc-code').value = code;
+  document.getElementById('acc-bank').value = bank;
+  document.getElementById('acc-number').value = number;
+  document.getElementById('acc-code').readOnly = true;
+  document.getElementById('acc-code').style.opacity = '0.5';
+  // change button text
+  const btn = document.querySelector('[onclick="saveAccount()"]');
+  if (btn) { btn.textContent = '💾 บันทึกการแก้ไข'; btn.onclick = updateAccount; }
+  window.scrollTo(0, 0);
+  showToast('กำลังแก้ไขบัญชี ' + code, 'success');
+}
+
+async function updateAccount() {
+  const code = document.getElementById('acc-code').value.trim();
+  const bank = document.getElementById('acc-bank').value.trim();
+  const number = document.getElementById('acc-number').value.trim();
+  if (!bank || !number) { showToast('กรุณากรอกข้อมูลให้ครบ', 'error'); return; }
+  try {
+    const res = await api('updateAccount', { code, bank, number });
+    if (res.success) {
+      showToast('✅ แก้ไขบัญชีสำเร็จ', 'success');
+      resetAccountForm();
+      loadAccounts();
+    } else throw new Error(res.message);
+  } catch (e) { showToast('❌ ' + e.message, 'error'); }
+}
+
+async function deleteAccount(code) {
+  if (!confirm(`ยืนยันลบบัญชีรหัส "${code}" ?`)) return;
+  try {
+    const res = await api('deleteAccount', { code });
+    if (res.success) {
+      showToast('✅ ลบบัญชีแล้ว', 'success');
+      loadAccounts();
+    } else throw new Error(res.message);
+  } catch (e) { showToast('❌ ' + e.message, 'error'); }
+}
+
+function resetAccountForm() {
+  document.getElementById('acc-code').value = '';
+  document.getElementById('acc-bank').value = '';
+  document.getElementById('acc-number').value = '';
+  document.getElementById('acc-code').readOnly = false;
+  document.getElementById('acc-code').style.opacity = '1';
+  const btn = document.querySelector('[onclick="updateAccount()"]');
+  if (btn) { btn.textContent = '＋ เพิ่ม'; btn.onclick = saveAccount; }
+}
 function previewVoucher(v) {
   const items = v.items || [];
   const itemRows = items.map(it => `
@@ -1337,8 +1430,7 @@ function previewVoucher(v) {
       <div class="v-meta"><strong>รายละเอียด :</strong></div>
       <div class="v-meta"><strong>วันที่รับเงิน : ${formatDateTHFull(v.date)}</strong></div>
       <div class="v-meta">รับจาก : ${v.receivedFrom}</div>
-      ${v.accountLabel ? `<div class="v-meta">บัญชีธนาคาร : ${v.accountLabel}</div>` : ''}
-      ${v.note ? `<div class="v-meta">หมายเหตุ : ${v.note}</div>` : ''}
+      <div class="v-meta">${v.accountLabel || ''}</div>
       <table>
         <thead>
           <tr><th>รายการ</th><th>จำนวนเงิน</th></tr>
@@ -1346,7 +1438,7 @@ function previewVoucher(v) {
         <tbody>
           ${itemRows}${padRows}
           <tr class="v-total-row">
-            <td style="text-align:right">#N/A</td>
+            <td style="text-align:right">${bahtText(v.total)}</td>
             <td class="amt">${formatNumber(v.total)}</td>
           </tr>
         </tbody>
@@ -1393,7 +1485,99 @@ function saveSettings() {
   loadAccounts();
 }
 
-// ======== UTILS ========
+// ======== THAI BAHT TEXT ========
+function bahtText(amount) {
+  const num = parseFloat(amount) || 0;
+  const units  = ['', 'หนึ่ง', 'สอง', 'สาม', 'สี่', 'ห้า', 'หก', 'เจ็ด', 'แปด', 'เก้า'];
+  const places = ['', 'สิบ', 'ร้อย', 'พัน', 'หมื่น', 'แสน'];
+
+  function readGroup(n) {
+    if (n === 0) return '';
+    let result = '';
+    const s = String(n).padStart(6, '0').split('');
+    const hasTens = parseInt(s[4]) > 0;
+    s.forEach((d, i) => {
+      const di = parseInt(d);
+      const pos = 5 - i;
+      if (di === 0) return;
+      if (pos === 1 && di === 1) result += 'สิบ';
+      else if (pos === 1 && di === 2) result += 'ยี่สิบ';
+      else if (pos === 0 && di === 1 && hasTens) result += 'เอ็ด';
+      else result += units[di] + places[pos];
+    });
+    return result;
+  }
+
+  const absNum   = Math.abs(num);
+  const intPart  = Math.floor(absNum);
+  const fracPart = Math.round((absNum - intPart) * 100);
+
+  let text = '';
+  if (intPart === 0) {
+    text = 'ศูนย์บาท';
+  } else {
+    const millions = Math.floor(intPart / 1000000);
+    const remainder = intPart % 1000000;
+    if (millions > 0) text += readGroup(millions) + 'ล้าน';
+    if (remainder > 0) text += readGroup(remainder);
+    text += 'บาท';
+  }
+  text += fracPart > 0 ? readGroup(fracPart) + 'สตางค์' : 'ถ้วน';
+  if (num < 0) text = 'ลบ' + text;
+  return text;
+}
+function formatRef(val) {
+  if (!val) return '';
+  if (/^\d{4}-\d{2}-\d{2}T/.test(val) || /^\d{4}-\d{2}-\d{2}$/.test(val)) {
+    const d = new Date(val);
+    if (!isNaN(d)) return String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
+  }
+  return val;
+}
+
+// ======== OPTIONS MANAGEMENT ========
+function renderOptionsPage() {
+  renderOptionTags('receivedFrom', 'opt-receivedfrom-list');
+  renderOptionTags('description', 'opt-description-list');
+}
+
+function renderOptionTags(key, containerId) {
+  const wrap = document.getElementById(containerId);
+  if (!wrap) return;
+  wrap.innerHTML = comboOptions[key].map((opt, i) => `
+    <span style="display:inline-flex;align-items:center;gap:6px;background:var(--cream);border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-size:13px">
+      ${opt}
+      <button onclick="removeOption('${key}',${i})" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:14px;line-height:1;padding:0">✕</button>
+    </span>
+  `).join('');
+}
+
+function addOption(key, inputId) {
+  const input = document.getElementById(inputId);
+  const val = input.value.trim();
+  if (!val) return;
+  if (!comboOptions[key].includes(val)) {
+    comboOptions[key].push(val);
+    saveComboOptions(key);
+    populateCombo('f-from', 'receivedFrom');
+    refreshAllItemSelects();
+  }
+  input.value = '';
+  renderOptionsPage();
+  showToast('✅ เพิ่มตัวเลือก "' + val + '" แล้ว', 'success');
+}
+
+function removeOption(key, index) {
+  const val = comboOptions[key][index];
+  if (!confirm('ลบ "' + val + '" ?')) return;
+  comboOptions[key].splice(index, 1);
+  saveComboOptions(key);
+  populateCombo('f-from', 'receivedFrom');
+  refreshAllItemSelects();
+  renderOptionsPage();
+  showToast('ลบตัวเลือกแล้ว', 'success');
+}
+
 function formatNumber(n) {
   return parseFloat(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
