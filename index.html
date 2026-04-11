@@ -775,33 +775,6 @@
         </div>
       </div>
     </div>
-      <div class="card" style="margin-bottom:20px">
-        <div class="card-header">
-          <span class="card-title">เพิ่มบัญชีธนาคาร</span>
-        </div>
-        <div style="padding:20px;display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end">
-          <div class="form-group">
-            <label class="form-label">ธนาคาร</label>
-            <input type="text" class="form-input" id="acc-bank" placeholder="BBL, SCB, ...">
-          </div>
-          <div class="form-group">
-            <label class="form-label">เลขที่บัญชี</label>
-            <input type="text" class="form-input" id="acc-number" placeholder="101-1-01010-1" maxlength="13" oninput="formatAccNumber(this)">
-          </div>
-          <button class="btn btn-primary" onclick="saveAccount()" style="height:42px">＋ เพิ่ม</button>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-header">
-          <span class="card-title">บัญชีธนาคารทั้งหมด</span>
-          <button class="btn btn-outline btn-sm" onclick="loadAccounts()">↻ รีเฟรช</button>
-        </div>
-        <div id="accounts-list-wrap">
-          <div class="empty-state"><div class="icon">🏦</div><p>กำลังโหลด...</p></div>
-        </div>
-      </div>
-    </div>
 
     <!-- ===== ACCOUNTS ===== -->
     <div class="page" id="page-accounts">
