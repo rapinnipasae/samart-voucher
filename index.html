@@ -323,7 +323,6 @@
   }
   .items-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--border); position: relative; }
   .items-table tbody tr:last-child td { border-bottom: none; }
-  .sdrop-list { z-index: 1000; }
   .items-table input {
     width: 100%;
     padding: 7px 10px;
@@ -544,8 +543,8 @@
   .sdrop-list {
     display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0;
     background: white; border: 1px solid var(--border); border-radius: 10px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.12); z-index: 999;
-    max-height: 220px; overflow-y: auto;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.16); z-index: 1000;
+    max-height: 240px; overflow-y: auto;
   }
   .sdrop-list.open { display: block; }
   .sdrop-search {
@@ -1135,11 +1134,31 @@ function toggleSdrop(uid) {
   const list = document.getElementById('sdrop-' + uid + '-list');
   if (!list) return;
   const isOpen = list.classList.contains('open');
-  document.querySelectorAll('.sdrop-list.open').forEach(l => l.classList.remove('open'));
+  document.querySelectorAll('.sdrop-list.open').forEach(l => {
+    l.classList.remove('open');
+    l.style.top = '';
+    l.style.bottom = '';
+  });
   if (!isOpen) {
+    // Check if enough space below
+    const trigger = document.getElementById('sdrop-' + uid + '-display');
+    const wrap = trigger ? trigger.closest('.sdrop-wrap') : null;
+    if (wrap) {
+      const rect = wrap.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const listHeight = 260; // max-height of list
+      if (spaceBelow < listHeight && rect.top > listHeight) {
+        // Open upward
+        list.style.top = 'auto';
+        list.style.bottom = 'calc(100% + 4px)';
+      } else {
+        list.style.top = 'calc(100% + 4px)';
+        list.style.bottom = 'auto';
+      }
+    }
     list.classList.add('open');
     const search = document.getElementById('sdrop-' + uid + '-search');
-    if (search) { search.value = ''; setTimeout(()=>search.focus(),50); }
+    if (search) { search.value = ''; setTimeout(() => search.focus(), 50); }
     const key = uid === 'from' ? 'receivedFrom' : 'description';
     renderSdropOptions(uid, key);
   }
