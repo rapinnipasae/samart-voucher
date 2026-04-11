@@ -514,21 +514,29 @@
 
   /* SEARCHABLE DROPDOWN */
   .sdrop-wrap { position: relative; width: 100%; }
-  .sdrop-input {
+  .sdrop-trigger {
     width: 100%; padding: 10px 36px 10px 14px;
     border: 1px solid var(--border); border-radius: 8px;
     font-family: 'Sarabun', sans-serif; font-size: 14px;
-    background: white; outline: none;
+    background: white; outline: none; cursor: pointer;
     transition: border-color 0.2s, box-shadow 0.2s;
-    cursor: pointer;
+    text-align: left; color: var(--text-dark);
+    display: flex; align-items: center;
+    min-height: 42px; user-select: none;
   }
-  .sdrop-input:focus {
+  .sdrop-trigger.placeholder { color: #aaa; }
+  .sdrop-trigger:hover, .sdrop-trigger:focus {
     border-color: var(--navy);
     box-shadow: 0 0 0 3px rgba(13,27,42,0.08);
   }
+  .sdrop-trigger.item-trigger {
+    padding: 7px 28px 7px 10px; font-size: 13px;
+    background: var(--cream); border-color: transparent; min-height: 34px;
+  }
+  .sdrop-trigger.item-trigger:hover { background: white; border-color: var(--navy); }
   .sdrop-arrow {
     position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
-    pointer-events: none; color: var(--text-light); font-size: 12px;
+    pointer-events: none; color: var(--text-light); font-size: 11px;
   }
   .sdrop-list {
     display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0;
@@ -549,8 +557,7 @@
   .sdrop-search input:focus { border-color: var(--navy); }
   .sdrop-option {
     padding: 9px 14px; font-size: 14px; cursor: pointer;
-    transition: background 0.1s;
-    font-family: 'Sarabun', sans-serif;
+    transition: background 0.1s; font-family: 'Sarabun', sans-serif;
   }
   .sdrop-option:hover { background: var(--cream); }
   .sdrop-option.selected { background: rgba(13,27,42,0.06); font-weight: 600; }
@@ -559,13 +566,6 @@
     position: sticky; bottom: 0; background: white;
   }
   .sdrop-option.no-result { color: var(--text-light); font-style: italic; pointer-events: none; }
-
-  /* items searchable */
-  .sdrop-input.item-input {
-    padding: 7px 30px 7px 10px; font-size: 13px;
-    background: var(--cream); border-color: transparent;
-  }
-  .sdrop-input.item-input:focus { background: white; border-color: var(--navy); }
 
   /* COMBOBOX add-new row */
   .combo-new-row {
@@ -705,7 +705,7 @@
           <div class="form-group">
             <label class="form-label">รับจาก *</label>
             <div class="sdrop-wrap" id="sdrop-from-wrap">
-              <input type="text" class="sdrop-input" id="f-from-display" placeholder="— เลือก หรือพิมพ์ค้นหา —" readonly onclick="toggleSdrop('from')" autocomplete="off">
+              <button type="button" class="sdrop-trigger placeholder" id="f-from-display" onclick="toggleSdrop('from')">— เลือก หรือพิมพ์ค้นหา —</button>
               <span class="sdrop-arrow">▼</span>
               <div class="sdrop-list" id="sdrop-from-list">
                 <div class="sdrop-search"><input type="text" id="sdrop-from-search" placeholder="🔍 ค้นหา..." oninput="filterSdrop('from')" onclick="event.stopPropagation()"></div>
@@ -771,11 +771,7 @@
         <div class="card-header">
           <span class="card-title">เพิ่มบัญชีธนาคาร</span>
         </div>
-        <div style="padding:20px;display:grid;grid-template-columns:100px 1fr 1fr auto;gap:12px;align-items:end">
-          <div class="form-group">
-            <label class="form-label">รหัส</label>
-            <input type="text" class="form-input" id="acc-code" placeholder="001">
-          </div>
+        <div style="padding:20px;display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end">
           <div class="form-group">
             <label class="form-label">ธนาคาร</label>
             <input type="text" class="form-input" id="acc-bank" placeholder="BBL, SCB, ...">
@@ -783,7 +779,6 @@
           <div class="form-group">
             <label class="form-label">เลขที่บัญชี</label>
             <input type="text" class="form-input" id="acc-number" placeholder="101-1-01010-1" maxlength="13" oninput="formatAccNumber(this)">
-            <span style="font-size:11px;color:var(--text-light);margin-top:2px">รูปแบบ xxx-x-xxxxx-x</span>
           </div>
           <button class="btn btn-primary" onclick="saveAccount()" style="height:42px">＋ เพิ่ม</button>
         </div>
@@ -1155,13 +1150,16 @@ function filterSdrop(uid) {
 
 function selectSdrop(uid, key, val) {
   sdropState[uid] = { key, value: val };
-  const display = document.getElementById('sdrop-' + uid + '-display');
-  if (display) display.value = val;
+  const btn = document.getElementById('sdrop-' + uid + '-display');
+  if (btn) { btn.textContent = val; btn.classList.remove('placeholder'); }
   if (uid === 'from') {
     const h = document.getElementById('f-from'); if (h) h.value = val;
   } else {
     const wrapEl = document.getElementById('sdrop-' + uid + '-wrap');
-    if (wrapEl) { const tr = wrapEl.closest('tr'); if (tr) { const h = tr.querySelector('.item-desc-val'); if (h) h.value = val; } }
+    if (wrapEl) {
+      const tr = wrapEl.closest('tr');
+      if (tr) { const h = tr.querySelector('.item-desc-val'); if (h) h.value = val; }
+    }
   }
   const list = document.getElementById('sdrop-' + uid + '-list');
   if (list) list.classList.remove('open');
@@ -1215,7 +1213,7 @@ function addItem() {
     <td style="text-align:center;color:var(--text-light);font-size:13px">${itemCount}</td>
     <td>
       <div class="sdrop-wrap" id="sdrop-${uid}-wrap" style="position:relative">
-        <input type="text" class="sdrop-input item-input" id="sdrop-${uid}-display" placeholder="— เลือก หรือพิมพ์ —" readonly onclick="toggleSdrop('${uid}')" autocomplete="off">
+        <button type="button" class="sdrop-trigger item-trigger placeholder" id="sdrop-${uid}-display" onclick="toggleSdrop('${uid}')">— เลือก —</button>
         <span class="sdrop-arrow" style="font-size:10px">▼</span>
         <div class="sdrop-list" id="sdrop-${uid}-list">
           <div class="sdrop-search"><input type="text" id="sdrop-${uid}-search" placeholder="🔍 ค้นหา..." oninput="filterSdrop('${uid}')" onclick="event.stopPropagation()"></div>
@@ -1314,7 +1312,8 @@ async function saveVoucher() {
 
 function resetForm() {
   sdropState['from'] = null;
-  const d = document.getElementById('sdrop-from-display'); if (d) d.value = '';
+  const btn = document.getElementById('sdrop-from-display');
+  if (btn) { btn.textContent = '— เลือก หรือพิมพ์ค้นหา —'; btn.classList.add('placeholder'); }
   const h = document.getElementById('f-from'); if (h) h.value = '';
   document.getElementById('f-account').value = '';
   document.getElementById('f-note').value = '';
@@ -1392,16 +1391,18 @@ function populateAccountDropdown(data) {
   });
 }
 
+let editingAccountCode = null; // track which account is being edited
+
 async function saveAccount() {
-  const code = document.getElementById('acc-code').value.trim();
   const bank = document.getElementById('acc-bank').value.trim();
   const number = document.getElementById('acc-number').value.trim();
-  if (!code || !bank || !number) { showToast('กรุณากรอกข้อมูลให้ครบ', 'error'); return; }
+  if (!bank || !number) { showToast('กรุณากรอกข้อมูลให้ครบ', 'error'); return; }
+  // auto-generate code from bank+number
+  const code = (bank + '_' + number.replace(/-/g,'')).slice(0, 20);
   try {
     const res = await api('createAccount', { code, bank, number });
     if (res.success) {
       showToast('✅ เพิ่มบัญชีสำเร็จ', 'success');
-      document.getElementById('acc-code').value = '';
       document.getElementById('acc-bank').value = '';
       document.getElementById('acc-number').value = '';
       loadAccounts();
@@ -1420,25 +1421,21 @@ function formatAccNumber(input) {
 }
 
 function editAccount(code, bank, number) {
-  document.getElementById('acc-code').value = code;
+  editingAccountCode = code;
   document.getElementById('acc-bank').value = bank;
   document.getElementById('acc-number').value = number;
-  document.getElementById('acc-code').readOnly = true;
-  document.getElementById('acc-code').style.opacity = '0.5';
-  // change button text
   const btn = document.querySelector('[onclick="saveAccount()"]');
-  if (btn) { btn.textContent = '💾 บันทึกการแก้ไข'; btn.onclick = updateAccount; }
-  window.scrollTo(0, 0);
-  showToast('กำลังแก้ไขบัญชี ' + code, 'success');
+  if (btn) { btn.textContent = '💾 บันทึก'; btn.onclick = updateAccount; }
+  window.scrollTo(0,0);
+  showToast('กำลังแก้ไขบัญชี ' + bank, 'success');
 }
 
 async function updateAccount() {
-  const code = document.getElementById('acc-code').value.trim();
   const bank = document.getElementById('acc-bank').value.trim();
   const number = document.getElementById('acc-number').value.trim();
   if (!bank || !number) { showToast('กรุณากรอกข้อมูลให้ครบ', 'error'); return; }
   try {
-    const res = await api('updateAccount', { code, bank, number });
+    const res = await api('updateAccount', { code: editingAccountCode, bank, number });
     if (res.success) {
       showToast('✅ แก้ไขบัญชีสำเร็จ', 'success');
       resetAccountForm();
@@ -1448,7 +1445,7 @@ async function updateAccount() {
 }
 
 async function deleteAccount(code) {
-  if (!confirm(`ยืนยันลบบัญชีรหัส "${code}" ?`)) return;
+  if (!confirm('ยืนยันลบบัญชีนี้?')) return;
   try {
     const res = await api('deleteAccount', { code });
     if (res.success) {
@@ -1459,11 +1456,9 @@ async function deleteAccount(code) {
 }
 
 function resetAccountForm() {
-  document.getElementById('acc-code').value = '';
+  editingAccountCode = null;
   document.getElementById('acc-bank').value = '';
   document.getElementById('acc-number').value = '';
-  document.getElementById('acc-code').readOnly = false;
-  document.getElementById('acc-code').style.opacity = '1';
   const btn = document.querySelector('[onclick="updateAccount()"]');
   if (btn) { btn.textContent = '＋ เพิ่ม'; btn.onclick = saveAccount; }
 }
