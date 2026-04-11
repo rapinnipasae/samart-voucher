@@ -895,7 +895,7 @@ let allVouchers = [];
 let allAccounts = [];
 let itemCount = 0;
 
-// Combo options stored in localStorage
+// Combo options — loaded from Sheets, fallback to localStorage
 let comboOptions = {
   receivedFrom: JSON.parse(localStorage.getItem('combo_receivedFrom') || '["BBL","SCB","KTB","KBANK","GSB"]'),
   description:  JSON.parse(localStorage.getItem('combo_description')  || '["รับคืนภาษีหัก ณ ที่จ่าย","ค่าธรรมเนียม","Service Fee","เงินรับล่วงหน้า"]')
@@ -903,6 +903,33 @@ let comboOptions = {
 
 function saveComboOptions(key) {
   localStorage.setItem('combo_' + key, JSON.stringify(comboOptions[key]));
+  // sync to Sheets if connected
+  if (SCRIPT_URL) syncOptionsToSheet();
+}
+
+async function loadOptionsFromSheet() {
+  if (!SCRIPT_URL) return;
+  try {
+    const res = await apiGet('getOptions');
+    if (res.success && res.data) {
+      if (res.data.receivedFrom && res.data.receivedFrom.length) {
+        comboOptions.receivedFrom = res.data.receivedFrom;
+        localStorage.setItem('combo_receivedFrom', JSON.stringify(comboOptions.receivedFrom));
+      }
+      if (res.data.description && res.data.description.length) {
+        comboOptions.description = res.data.description;
+        localStorage.setItem('combo_description', JSON.stringify(comboOptions.description));
+      }
+      renderOptionsPage();
+    }
+  } catch(e) { console.log('loadOptions error', e); }
+}
+
+async function syncOptionsToSheet() {
+  if (!SCRIPT_URL) return;
+  try {
+    await api('saveOptions', { receivedFrom: comboOptions.receivedFrom, description: comboOptions.description });
+  } catch(e) { console.log('syncOptions error', e); }
 }
 
 // ======== INIT ========
@@ -917,6 +944,7 @@ window.onload = () => {
   addItem(); addItem();
   loadVouchers();
   loadAccounts();
+  loadOptionsFromSheet();
 };
 
 function checkConfig() {
@@ -1038,18 +1066,16 @@ function renderVoucherTable(data) {
 }
 
 function updateStats(data) {
-  document.getElementById('stat-total').textContent = data.length;
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set('stat-total', data.length);
   const now = new Date();
-  const thisMonth = data.filter(v => {
-    const d = new Date(v.date);
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-  });
-  const monthTotal = thisMonth.reduce((s, v) => s + parseFloat(v.total || 0), 0);
-  document.getElementById('stat-month').textContent = formatNumber(monthTotal);
+  const thisMonth = data.filter(v => { const d = new Date(v.date); return d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear(); });
+  const monthTotal = thisMonth.reduce((s,v) => s + parseFloat(v.total||0), 0);
+  set('stat-month', formatNumber(monthTotal));
   if (data.length > 0) {
-    const last = data[data.length - 1];
-    document.getElementById('stat-latest').textContent = formatNumber(last.total);
-    document.getElementById('stat-latest-date').textContent = formatDateTH(last.date);
+    const last = data[data.length-1];
+    set('stat-latest', formatNumber(last.total));
+    set('stat-latest-date', formatDateTH(last.date));
   }
 }
 
