@@ -705,7 +705,7 @@
           <div class="form-group">
             <label class="form-label">รับจาก *</label>
             <div class="sdrop-wrap" id="sdrop-from-wrap">
-              <button type="button" class="sdrop-trigger placeholder" id="f-from-display" onclick="toggleSdrop('from')">— เลือก หรือพิมพ์ค้นหา —</button>
+              <button type="button" class="sdrop-trigger placeholder" id="sdrop-from-display" onclick="toggleSdrop('from')">— เลือก หรือพิมพ์ค้นหา —</button>
               <span class="sdrop-arrow">▼</span>
               <div class="sdrop-list" id="sdrop-from-list">
                 <div class="sdrop-search"><input type="text" id="sdrop-from-search" placeholder="🔍 ค้นหา..." oninput="filterSdrop('from')" onclick="event.stopPropagation()"></div>
@@ -1488,7 +1488,7 @@ function previewVoucher(v) {
       <div class="v-meta"><strong>รายละเอียด :</strong></div>
       <div class="v-meta"><strong>วันที่รับเงิน : ${formatDateTHFull(v.date)}</strong></div>
       <div class="v-meta">รับจาก : ${v.receivedFrom}</div>
-      // <div class="v-meta">${v.accountLabel || ''}</div>
+      <div class="v-meta">${v.accountLabel || ''}</div>
       <table>
         <thead>
           <tr><th>รายการ</th><th>จำนวนเงิน</th></tr>
