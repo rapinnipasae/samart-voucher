@@ -696,6 +696,13 @@
     <!-- ===== CREATE ===== -->
     <div class="page" id="page-create">
       <div class="card" style="padding:28px">
+        <!-- MODE TOGGLE -->
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+          <span style="font-size:13px;font-weight:700;color:var(--text-mid)">โหมด:</span>
+          <button type="button" id="mode-normal-btn" class="btn btn-primary btn-sm" onclick="setMode('normal')">📄 ปกติ</button>
+          <button type="button" id="mode-tr-btn" class="btn btn-outline btn-sm" onclick="setMode('tr')">🔄 TR (โอนเงิน)</button>
+        </div>
+
         <div class="form-grid">
           <div class="form-group">
             <label class="form-label">วันที่รับเงิน *</label>
@@ -720,10 +727,23 @@
             <input type="hidden" id="f-from">
           </div>
           <div class="form-group">
-            <label class="form-label">บัญชีธนาคาร *</label>
+            <label class="form-label">บัญชีธนาคาร (ปลายทาง) *</label>
             <select class="form-input" id="f-account">
               <option value="">— เลือกบัญชี —</option>
             </select>
+          </div>
+          <!-- TR only: source account -->
+          <div class="form-group" id="tr-source-group" style="display:none">
+            <label class="form-label">บัญชีต้นทาง (รับจาก)</label>
+            <select class="form-input" id="f-source-account">
+              <option value="">— เลือกบัญชีต้นทาง —</option>
+            </select>
+          </div>
+          <!-- TR only: bank charge -->
+          <div class="form-group" id="tr-charge-group" style="display:none">
+            <label class="form-label">ค่า Bank Charge / รายการ</label>
+            <input type="text" class="form-input" id="f-bank-charge" value="20" placeholder="จำนวนเงิน Bank Charge">
+            <span style="font-size:11px;color:var(--text-light);margin-top:3px">ใส่ 0 ถ้าไม่มี Bank Charge</span>
           </div>
           <div class="form-group full">
             <label class="form-label">หมายเหตุ</label>
@@ -735,11 +755,14 @@
         <div class="items-section">
           <div class="items-header">
             <h3>รายการ</h3>
-            <button class="btn btn-outline btn-sm" onclick="addItem()">＋ เพิ่มรายการ</button>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-outline btn-sm" id="tr-add-group-btn" style="display:none" onclick="addTRGroup()">＋ เพิ่มกลุ่มโอนเงิน</button>
+              <button class="btn btn-outline btn-sm" id="normal-add-btn" onclick="addItem()">＋ เพิ่มรายการ</button>
+            </div>
           </div>
           <div class="items-table-wrap">
             <table class="items-table">
-              <thead>
+              <thead id="items-thead">
                 <tr>
                   <th style="width:40px">#</th>
                   <th>รายการ / คำอธิบาย</th>
@@ -751,7 +774,7 @@
               </tbody>
               <tfoot>
                 <tr class="total-row">
-                  <td colspan="2" style="text-align:right">รวมทั้งสิ้น</td>
+                  <td colspan="2" id="total-colspan" style="text-align:right">รวมทั้งสิ้น</td>
                   <td style="text-align:right" id="total-display">0.00</td>
                   <td></td>
                 </tr>
@@ -768,8 +791,6 @@
         </div>
       </div>
     </div>
-
-    <!-- ===== ACCOUNTS ===== -->
     <div class="page" id="page-accounts">
       <div class="card" style="margin-bottom:20px">
         <div class="card-header">
@@ -1226,6 +1247,97 @@ function refreshAllItemSelects() {
 }
 function handleItemDescChange() {}
 
+// ======== TR MODE ========
+let isTRMode = false;
+
+function setMode(mode) {
+  isTRMode = (mode === 'tr');
+  // toggle buttons
+  document.getElementById('mode-normal-btn').className = isTRMode ? 'btn btn-outline btn-sm' : 'btn btn-primary btn-sm';
+  document.getElementById('mode-tr-btn').className = isTRMode ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
+  // show/hide TR fields
+  document.getElementById('tr-source-group').style.display = isTRMode ? '' : 'none';
+  document.getElementById('tr-charge-group').style.display = isTRMode ? '' : 'none';
+  document.getElementById('tr-add-group-btn').style.display = isTRMode ? '' : 'none';
+  document.getElementById('normal-add-btn').style.display = isTRMode ? 'none' : '';
+  // update table header
+  const thead = document.getElementById('items-thead');
+  if (isTRMode) {
+    thead.innerHTML = `<tr>
+      <th style="width:36px">#</th>
+      <th style="width:130px">วันที่</th>
+      <th>รายการ / คำอธิบาย</th>
+      <th style="width:170px">จำนวนเงิน (บาท)</th>
+      <th style="width:40px"></th>
+    </tr>`;
+    document.getElementById('total-colspan').colSpan = 3;
+  } else {
+    thead.innerHTML = `<tr>
+      <th style="width:40px">#</th>
+      <th>รายการ / คำอธิบาย</th>
+      <th style="width:180px">จำนวนเงิน (บาท)</th>
+      <th style="width:48px"></th>
+    </tr>`;
+    document.getElementById('total-colspan').colSpan = 2;
+  }
+  // reset items
+  document.getElementById('items-tbody').innerHTML = '';
+  itemCount = 0;
+  if (isTRMode) {
+    addTRGroup();
+  } else {
+    addItem(); addItem();
+  }
+  calcTotal();
+  generateRef();
+  // populate source account dropdown
+  if (isTRMode) populateSourceAccountDropdown(allAccounts);
+}
+
+function addTRGroup() {
+  const charge = parseFloat(document.getElementById('f-bank-charge').value) || 0;
+  addTRRow('', 'โอนอัตโนมัติจาก SA เข้า C/A', '');
+  if (charge > 0) addTRRow('', 'Bank Charge', charge);
+}
+
+function addTRRow(date, desc, amount) {
+  itemCount++;
+  const tbody = document.getElementById('items-tbody');
+  const tr = document.createElement('tr');
+  tr.id = 'item-row-' + itemCount;
+  const ic = itemCount;
+  tr.innerHTML = `
+    <td style="text-align:center;color:var(--text-light);font-size:12px">${itemCount}</td>
+    <td><input type="text" class="tr-date-input" id="trdate-${ic}" placeholder="วว/ดด/ปปปป" value="${date}"
+      style="width:100%;padding:6px 8px;border:1px solid transparent;border-radius:6px;font-family:'Sarabun',sans-serif;font-size:13px;background:var(--cream)"
+      onfocus="this.style.borderColor='var(--navy)';this.style.background='white'"
+      onblur="this.style.borderColor='transparent';this.style.background='var(--cream)'"></td>
+    <td><input type="text" class="tr-desc-input item-desc-val" id="desc-${ic}" value="${desc}"
+      style="width:100%;padding:6px 8px;border:1px solid transparent;border-radius:6px;font-family:'Sarabun',sans-serif;font-size:13px;background:var(--cream)"
+      onfocus="this.style.borderColor='var(--navy)';this.style.background='white'"
+      onblur="this.style.borderColor='transparent';this.style.background='var(--cream)'"></td>
+    <td><input type="text" inputmode="decimal" class="amount-input" id="amt-${ic}" value="${amount||''}" placeholder="0.00"
+      oninput="formatAmountInput(this)" style="text-align:right"></td>
+    <td><button class="del-row" onclick="removeItem(${ic})">✕</button></td>
+  `;
+  tbody.appendChild(tr);
+  if (amount) { const inp = document.getElementById('amt-' + ic); inp.dataset.raw = String(amount); inp.value = formatNumber(amount); }
+}
+
+function populateSourceAccountDropdown(data) {
+  const sel = document.getElementById('f-source-account');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— เลือกบัญชีต้นทาง —</option>';
+  data.forEach(a => {
+    const opt = document.createElement('option');
+    opt.value = a.code;
+    opt.textContent = `${a.bank} ${a.number}`;
+    if (a.code === cur) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
 // ======== ITEMS (FORM) ========
 function addItem() {
   itemCount++;
@@ -1305,12 +1417,24 @@ function getItems() {
   const rows = document.querySelectorAll('#items-tbody tr');
   const items = [];
   rows.forEach(tr => {
-    const descInp = tr.querySelector('.item-desc-val');
-    const amtInp  = tr.querySelector('input.amount-input');
-    if (descInp && amtInp) {
-      const desc = descInp.value || '';
-      const amt  = parseAmountInput(amtInp);
-      if (desc || amt) items.push({ description: desc, amount: amt });
+    if (isTRMode) {
+      const dateInp = tr.querySelector('.tr-date-input');
+      const descInp = tr.querySelector('.tr-desc-input');
+      const amtInp  = tr.querySelector('input.amount-input');
+      if (descInp && amtInp) {
+        const date = dateInp ? dateInp.value.trim() : '';
+        const desc = descInp.value.trim();
+        const amt  = parseAmountInput(amtInp);
+        if (desc || amt) items.push({ date, description: desc, amount: amt });
+      }
+    } else {
+      const descInp = tr.querySelector('.item-desc-val');
+      const amtInp  = tr.querySelector('input.amount-input');
+      if (descInp && amtInp) {
+        const desc = descInp.value || '';
+        const amt  = parseAmountInput(amtInp);
+        if (desc || amt) items.push({ description: desc, amount: amt });
+      }
     }
   });
   return items;
@@ -1334,10 +1458,14 @@ async function saveVoucher() {
   const account = allAccounts.find(a => a.code === accountCode);
   const total = items.reduce((s, i) => s + i.amount, 0);
 
+  const sourceCode = isTRMode ? document.getElementById('f-source-account').value : '';
+  const sourceAccount = allAccounts.find(a => a.code === sourceCode);
+
   const payload = {
     date, ref, receivedFrom: from, accountCode,
     accountLabel: account ? `${account.bank} ${account.number}` : accountCode,
-    note, items, total
+    sourceAccountLabel: sourceAccount ? `${sourceAccount.bank} ${sourceAccount.number}` : '',
+    note, items, total, mode: isTRMode ? 'TR' : 'normal'
   };
 
   const btn = document.getElementById('save-btn');
@@ -1360,18 +1488,15 @@ async function saveVoucher() {
 }
 
 function resetForm() {
+  isTRMode = false;
+  setMode('normal');
   sdropState['from'] = null;
   const btn = document.getElementById('sdrop-from-display');
   if (btn) { btn.textContent = '— เลือก หรือพิมพ์ค้นหา —'; btn.classList.add('placeholder'); }
   const h = document.getElementById('f-from'); if (h) h.value = '';
   document.getElementById('f-account').value = '';
   document.getElementById('f-note').value = '';
-  document.getElementById('items-tbody').innerHTML = '';
-  itemCount = 0;
-  addItem(); addItem();
-  calcTotal();
   setDefaultDate();
-  generateRef();
 }
 
 function generateRef() {
@@ -1379,7 +1504,8 @@ function generateRef() {
   const mm = String(now.getMonth() + 1).padStart(2, '0');
   const yy = String(now.getFullYear()).slice(-2);
   const seq = String(allVouchers.length + 1).padStart(3, '0');
-  document.getElementById('f-ref').value = `${seq}/${mm}/${yy}`;
+  const prefix = isTRMode ? 'R' : '';
+  document.getElementById('f-ref').value = `${prefix}${seq}/${mm}/${yy}`;
 }
 
 // ======== ACCOUNTS ========
@@ -1438,6 +1564,7 @@ function populateAccountDropdown(data) {
     if (a.code === cur) opt.selected = true;
     sel.appendChild(opt);
   });
+  populateSourceAccountDropdown(data);
 }
 
 let editingAccountCode = null; // track which account is being edited
@@ -1513,15 +1640,39 @@ function resetAccountForm() {
 }
 function previewVoucher(v) {
   const items = v.items || [];
-  const itemRows = items.map(it => `
-    <tr>
-      <td>${it.description || ''}</td>
-      <td class="amt">${it.amount ? formatNumber(it.amount) : ''}</td>
-    </tr>
-  `).join('');
-  // pad to 5 rows min
-  const padCount = Math.max(0, 5 - items.length);
-  const padRows = Array(padCount).fill('<tr><td>&nbsp;</td><td></td></tr>').join('');
+  const isTR = v.mode === 'TR';
+
+  let itemRowsHtml = '';
+  if (isTR) {
+    itemRowsHtml = items.map(it => `
+      <tr>
+        <td>${it.date || ''}</td>
+        <td>${it.description || ''}</td>
+        <td class="amt">${it.amount ? formatNumber(it.amount) : ''}</td>
+      </tr>`).join('');
+    const padCount = Math.max(0, 5 - items.length);
+    itemRowsHtml += Array(padCount).fill('<tr><td>&nbsp;</td><td></td><td></td></tr>').join('');
+  } else {
+    itemRowsHtml = items.map(it => `
+      <tr>
+        <td>${it.description || ''}</td>
+        <td class="amt">${it.amount ? formatNumber(it.amount) : ''}</td>
+      </tr>`).join('');
+    const padCount = Math.max(0, 5 - items.length);
+    itemRowsHtml += Array(padCount).fill('<tr><td>&nbsp;</td><td></td></tr>').join('');
+  }
+
+  const tableHeader = isTR
+    ? `<tr><th>วันที่</th><th>รายการ</th><th>จำนวนเงิน</th></tr>`
+    : `<tr><th>รายการ</th><th>จำนวนเงิน</th></tr>`;
+
+  const metaLines = isTR
+    ? `<div class="v-meta">รับจาก : ${v.receivedFrom}${v.sourceAccountLabel ? ' ' + v.sourceAccountLabel : ''}</div>
+       ${v.accountLabel ? `<div class="v-meta">เลขที่บัญชีธนาคาร : ${v.accountLabel}</div>` : ''}`
+    : `<div class="v-meta">รับจาก : ${v.receivedFrom}</div>
+       ${v.accountLabel ? `<div class="v-meta">${v.accountLabel}</div>` : ''}`;
+
+  const totalColspan = isTR ? 2 : 1;
 
   document.getElementById('print-area').innerHTML = `
     <div class="voucher-print">
@@ -1536,16 +1687,13 @@ function previewVoucher(v) {
       </div>
       <div class="v-meta"><strong>รายละเอียด :</strong></div>
       <div class="v-meta"><strong>วันที่รับเงิน : ${formatDateTHFull(v.date)}</strong></div>
-      <div class="v-meta">รับจาก : ${v.receivedFrom}</div>
-      <div class="v-meta">${v.accountLabel || ''}</div>
+      ${metaLines}
       <table>
-        <thead>
-          <tr><th>รายการ</th><th>จำนวนเงิน</th></tr>
-        </thead>
+        <thead>${tableHeader}</thead>
         <tbody>
-          ${itemRows}${padRows}
+          ${itemRowsHtml}
           <tr class="v-total-row">
-            <td style="text-align:right">${bahtText(v.total)}</td>
+            <td colspan="${totalColspan}" style="text-align:right">${bahtText(v.total)}</td>
             <td class="amt">${formatNumber(v.total)}</td>
           </tr>
         </tbody>
