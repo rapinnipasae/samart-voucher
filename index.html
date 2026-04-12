@@ -717,19 +717,31 @@
               </div>
             </div>
             <input type="text" class="form-input" id="f-ref" placeholder="สร้างอัตโนมัติ...">
-            <span style="font-size:11px;color:var(--text-light);margin-top:3px" id="ref-hint">ปกติ: 001/เดือน/ปี — แก้ไขได้</span>
+
           </div>
           <div class="form-group">
             <label class="form-label">รับจาก <span style="font-weight:400;color:var(--text-light)">(ธนาคารลูกค้า)</span> *</label>
-            <select class="form-input" id="f-from-select">
-              <option value="">— เลือกบัญชีลูกค้า —</option>
-            </select>
+            <div class="sdrop-wrap" id="sdrop-custfrom-wrap">
+              <button type="button" class="sdrop-trigger placeholder" id="sdrop-custfrom-display" onclick="toggleAccountSdrop('custfrom')">— เลือกบัญชีลูกค้า —</button>
+              <span class="sdrop-arrow">▼</span>
+              <div class="sdrop-list" id="sdrop-custfrom-list">
+                <div class="sdrop-search"><input type="text" id="sdrop-custfrom-search" placeholder="🔍 ค้นหา..." oninput="filterAccountSdrop('custfrom')" onclick="event.stopPropagation()"></div>
+                <div id="sdrop-custfrom-options"></div>
+              </div>
+            </div>
+            <input type="hidden" id="f-from-select">
           </div>
           <div class="form-group">
             <label class="form-label">บัญชีธนาคาร <span style="font-weight:400;color:var(--text-light)">(ของเรา)</span> *</label>
-            <select class="form-input" id="f-account">
-              <option value="">— เลือกบัญชี —</option>
-            </select>
+            <div class="sdrop-wrap" id="sdrop-ouracct-wrap">
+              <button type="button" class="sdrop-trigger placeholder" id="sdrop-ouracct-display" onclick="toggleAccountSdrop('ouracct')">— เลือกบัญชี —</button>
+              <span class="sdrop-arrow">▼</span>
+              <div class="sdrop-list" id="sdrop-ouracct-list">
+                <div class="sdrop-search"><input type="text" id="sdrop-ouracct-search" placeholder="🔍 ค้นหา..." oninput="filterAccountSdrop('ouracct')" onclick="event.stopPropagation()"></div>
+                <div id="sdrop-ouracct-options"></div>
+              </div>
+            </div>
+            <input type="hidden" id="f-account">
           </div>
           <div class="form-group full">
             <label class="form-label">หมายเหตุ</label>
@@ -1314,7 +1326,7 @@ function addItem() {
       </div>
       <input type="hidden" id="desc-${ic}" class="item-desc-val">
     </td>
-    <td><input type="text" inputmode="decimal" class="amount-input" placeholder="0.00" id="amt-${ic}" oninput="formatAmountInput(this)" style="text-align:right"></td>
+    <td><input type="text" inputmode="decimal" class="amount-input" placeholder="0" id="amt-${ic}" oninput="formatAmountInput(this)" style="text-align:right" value="0"></td>
     <td><button class="del-row" onclick="removeItem(${ic})">✕</button></td>
   `;
   tbody.appendChild(tr);
@@ -1395,8 +1407,10 @@ function getItems() {
       const amtInp  = tr.querySelector('input.amount-input');
       if (descInp && amtInp) {
         const desc = descInp.value || '';
+        const rawAmt = amtInp.value;
         const amt  = parseAmountInput(amtInp);
-        if (desc || amt) items.push({ type: 'normal', description: desc, amount: amt });
+        // include if has description (even if amt=0)
+        if (desc) items.push({ type: 'normal', description: desc, amount: amt });
       }
     }
   });
@@ -1407,10 +1421,10 @@ function getItems() {
 async function saveVoucher() {
   const date = document.getElementById('f-date').value;
   const ref = document.getElementById('f-ref').value.trim();
-  const fromCode = document.getElementById('f-from-select').value;
+  const fromCode = document.getElementById('f-from-select').value || accountSdropVal.custfrom;
   const fromAccount = allCustomerAccounts.find(a => a.code === fromCode);
-  const from = fromAccount ? `${fromAccount.bank} ${fromAccount.number}` : '';
-  const accountCode = document.getElementById('f-account').value;
+  const from = fromAccount ? (fromAccount.bank + (fromAccount.number ? ' ' + fromAccount.number : '')) : '';
+  const accountCode = document.getElementById('f-account').value || accountSdropVal.ouracct;
   const note = document.getElementById('f-note').value.trim();
   const items = getItems();
 
@@ -1430,8 +1444,8 @@ async function saveVoucher() {
   const emptyDesc = normalItems.find(it => !it.description || !it.description.trim());
   if (emptyDesc) { showToast('กรุณาเลือกรายการ / คำอธิบายให้ครบทุกแถว', 'error'); return; }
   // validate: amount ห้ามว่าง/0
-  const emptyAmt = normalItems.find(it => !it.amount || it.amount <= 0);
-  if (emptyAmt) { showToast('กรุณากรอกจำนวนเงินให้ครบทุกแถว (ต้องมากกว่า 0)', 'error'); return; }
+  const emptyAmt = normalItems.find(it => it.amount === null || it.amount === undefined || it.amount === '' || isNaN(Number(it.amount)));
+  if (emptyAmt) { showToast('กรุณากรอกจำนวนเงินให้ครบทุกแถว', 'error'); return; }
 
   // ห้ามซ้ำ: normal ห้ามซ้ำทุกกรณี, TR ห้ามซ้ำในเดือนเดียวกัน
   if (ref) {
@@ -1487,7 +1501,14 @@ async function saveVoucher() {
 function resetForm() {
   const fromSel = document.getElementById('f-from-select');
   if (fromSel) fromSel.value = '';
-  document.getElementById('f-account').value = '';
+  accountSdropVal.custfrom = '';
+  accountSdropVal.ouracct = '';
+  const custBtn = document.getElementById('sdrop-custfrom-display');
+  if (custBtn) { custBtn.textContent = '— เลือกบัญชีลูกค้า —'; custBtn.classList.add('placeholder'); }
+  const ourBtn = document.getElementById('sdrop-ouracct-display');
+  if (ourBtn) { ourBtn.textContent = '— เลือกบัญชี —'; ourBtn.classList.add('placeholder'); }
+  const fAcct = document.getElementById('f-account');
+  if (fAcct) fAcct.value = '';
   document.getElementById('f-note').value = '';
   document.getElementById('items-tbody').innerHTML = '';
   itemCount = 0;
@@ -1503,9 +1524,6 @@ function setRefFormat(fmt) {
   const hint      = document.getElementById('ref-hint');
   if (btnNormal) btnNormal.className = fmt === 'normal' ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
   if (btnTR)     btnTR.className     = fmt === 'tr'     ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
-  if (hint) hint.textContent = fmt === 'tr'
-    ? 'TR: เดือน/ปี เช่น 12/2026 — แก้ไขได้'
-    : 'ปกติ: 001/เดือน/ปี — ห้ามซ้ำ แก้ไขได้';
   generateRef();
 }
 
@@ -1583,18 +1601,96 @@ function renderAccountsTable(data) {
     </table>`;
 }
 
-function populateAccountDropdown(data) {
-  const sel = document.getElementById('f-account');
-  const cur = sel.value;
-  sel.innerHTML = '<option value="">— เลือกบัญชี —</option>';
-  data.forEach(a => {
-    const opt = document.createElement('option');
-    opt.value = a.code;
-    opt.textContent = `${a.bank} ${a.number}`;
-    if (a.code === cur) opt.selected = true;
-    sel.appendChild(opt);
+// populateAccountDropdown moved to account sdrop section
+
+
+// ======== ACCOUNT SEARCHABLE DROPDOWNS (custfrom + ouracct) ========
+const accountSdropData = { custfrom: [], ouracct: [] };
+const accountSdropVal  = { custfrom: '', ouracct: '' };
+
+function renderAccountSdropOptions(uid, filter) {
+  const wrap = document.getElementById('sdrop-' + uid + '-options');
+  if (!wrap) return;
+  filter = (filter || '').toLowerCase();
+  const items = accountSdropData[uid].filter(a => {
+    const label = (a.bank + ' ' + (a.number || '')).toLowerCase();
+    return !filter || label.includes(filter);
   });
+  if (!items.length) {
+    wrap.innerHTML = '<div class="sdrop-option no-result">ไม่พบรายการ</div>';
+    return;
+  }
+  const cur = accountSdropVal[uid];
+  wrap.innerHTML = items.map(a => {
+    const label = a.bank + (a.number ? ' ' + a.number : '');
+    const sel = a.code === cur ? ' selected' : '';
+    const safeCode = a.code.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    const safeLabel = label.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    return '<div class="sdrop-option' + sel + '" onclick="selectAccountSdrop('' + uid + '','' + safeCode + '','' + safeLabel + '')">' + label + '</div>';
+  }).join('');
+}
+
+function toggleAccountSdrop(uid) {
+  const list = document.getElementById('sdrop-' + uid + '-list');
+  if (!list) return;
+  const isOpen = list.classList.contains('open');
+  // close all dropdowns
+  document.querySelectorAll('.sdrop-list.open').forEach(l => { l.classList.remove('open'); l.style.top=''; l.style.bottom=''; });
+  if (!isOpen) {
+    // flip if no space below
+    const trigger = document.getElementById('sdrop-' + uid + '-display');
+    const wrapEl = trigger ? trigger.closest('.sdrop-wrap') : null;
+    if (wrapEl) {
+      const rect = wrapEl.getBoundingClientRect();
+      if (window.innerHeight - rect.bottom < 260 && rect.top > 260) {
+        list.style.top = 'auto'; list.style.bottom = 'calc(100% + 4px)';
+      } else {
+        list.style.top = 'calc(100% + 4px)'; list.style.bottom = 'auto';
+      }
+    }
+    list.classList.add('open');
+    const search = document.getElementById('sdrop-' + uid + '-search');
+    if (search) { search.value = ''; setTimeout(() => search.focus(), 50); }
+    renderAccountSdropOptions(uid, '');
+  }
+}
+
+function filterAccountSdrop(uid) {
+  const search = document.getElementById('sdrop-' + uid + '-search');
+  renderAccountSdropOptions(uid, search ? search.value : '');
+}
+
+function selectAccountSdrop(uid, code, label) {
+  accountSdropVal[uid] = code;
+  const btn = document.getElementById('sdrop-' + uid + '-display');
+  if (btn) { btn.textContent = label; btn.classList.remove('placeholder'); }
+  // write to hidden input
+  if (uid === 'custfrom') {
+    const h = document.getElementById('f-from-select'); if (h) h.value = code;
+  } else {
+    const h = document.getElementById('f-account'); if (h) h.value = code;
+  }
+  const list = document.getElementById('sdrop-' + uid + '-list');
+  if (list) list.classList.remove('open');
+}
+
+function populateFromSelect(data) {
+  accountSdropData.custfrom = data;
+  const cur = accountSdropVal.custfrom;
+  if (cur) {
+    const a = data.find(x => x.code === cur);
+    if (a) { const btn = document.getElementById('sdrop-custfrom-display'); if (btn) { btn.textContent = a.bank + (a.number ? ' ' + a.number : ''); btn.classList.remove('placeholder'); } }
+  }
+}
+
+function populateAccountDropdown(data) {
+  accountSdropData.ouracct = data;
   populateSourceAccountDropdown(data);
+  const cur = accountSdropVal.ouracct;
+  if (cur) {
+    const a = data.find(x => x.code === cur);
+    if (a) { const btn = document.getElementById('sdrop-ouracct-display'); if (btn) { btn.textContent = a.bank + (a.number ? ' ' + a.number : ''); btn.classList.remove('placeholder'); } }
+  }
 }
 
 // ======== CUSTOMER ACCOUNTS ========
@@ -1643,19 +1739,7 @@ function renderCustomerAccountsTable(data) {
     </table>`;
 }
 
-function populateFromSelect(data) {
-  const sel = document.getElementById('f-from-select');
-  if (!sel) return;
-  const cur = sel.value;
-  sel.innerHTML = '<option value="">— เลือกบัญชีลูกค้า —</option>';
-  data.forEach(a => {
-    const opt = document.createElement('option');
-    opt.value = a.code;
-    opt.textContent = `${a.bank} ${a.number}`;
-    if (a.code === cur) opt.selected = true;
-    sel.appendChild(opt);
-  });
-}
+// populateFromSelect moved to account sdrop section
 
 let editingCustomerCode = null;
 
