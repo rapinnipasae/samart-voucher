@@ -716,7 +716,7 @@
               </div>
             </div>
             <input type="text" class="form-input" id="f-ref" placeholder="สร้างอัตโนมัติ...">
-            <span style="font-size:11px;color:var(--text-light);margin-top:3px" id="ref-hint">ปกติ: 001/เดือน/ปี — แก้ไขได้</span>
+            <!-- <span style="font-size:11px;color:var(--text-light);margin-top:3px" id="ref-hint">ปกติ: 001/เดือน/ปี — แก้ไขได้</span> -->
           </div>
           <div class="form-group">
             <label class="form-label">รับจาก <span style="font-weight:400;color:var(--text-light)">(ธนาคารลูกค้า)</span> *</label>
@@ -1036,6 +1036,7 @@ async function loadVouchers() {
     const res = await apiGet('getVouchers');
     if (res.success) {
       allVouchers = res.data || [];
+      generateRef();
       populateYearFilter(allVouchers);
       applyFilters();
       updateStats(allVouchers);
