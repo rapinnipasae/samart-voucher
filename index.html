@@ -716,7 +716,7 @@
               </div>
             </div>
             <input type="text" class="form-input" id="f-ref" placeholder="สร้างอัตโนมัติ...">
-            <!-- <span style="font-size:11px;color:var(--text-light);margin-top:3px" id="ref-hint">ปกติ: 001/เดือน/ปี — แก้ไขได้</span> -->
+            <span style="font-size:11px;color:var(--text-light);margin-top:3px" id="ref-hint">ปกติ: 001/เดือน/ปี — แก้ไขได้</span>
           </div>
           <div class="form-group">
             <label class="form-label">รับจาก <span style="font-weight:400;color:var(--text-light)">(ธนาคารลูกค้า)</span> *</label>
@@ -1036,7 +1036,6 @@ async function loadVouchers() {
     const res = await apiGet('getVouchers');
     if (res.success) {
       allVouchers = res.data || [];
-      generateRef();
       populateYearFilter(allVouchers);
       applyFilters();
       updateStats(allVouchers);
@@ -1243,12 +1242,13 @@ function addTRDateRow() {
   tr.className = 'tr-date-row';
   tr.dataset.type = 'tr';
   const ic = itemCount;
+  const today = new Date().toISOString().split('T')[0];
   tr.innerHTML = `
     <td><div class="reorder-btns"><button class="reorder-btn" onclick="moveRow(${ic},-1)" title="ขึ้น">▲</button><button class="reorder-btn" onclick="moveRow(${ic},1)" title="ลง">▼</button></div></td>
     <td style="text-align:center;color:var(--gold);font-size:11px;font-weight:700">TR</td>
     <td colspan="2">
-      <div class="tr-date-label">วันที่โอน</div>
-      <input type="date" id="trdate-${ic}" class="tr-date-val">
+      <div class="tr-date-label">วันที่โอน *</div>
+      <input type="date" id="trdate-${ic}" class="tr-date-val" value="${today}" required>
     </td>
     <td><button class="del-row" onclick="removeItem(${ic})">✕</button></td>
   `;
@@ -1369,8 +1369,7 @@ function getItems() {
   rows.forEach(tr => {
     if (tr.dataset.type === 'tr') {
       const dateInp = tr.querySelector('.tr-date-val');
-      const date = dateInp ? dateInp.value : '';
-      // Store TR date as special description so it's saved in Sheets
+      const date = dateInp && dateInp.value ? dateInp.value : new Date().toISOString().split('T')[0];
       items.push({ type: 'tr', date, description: '__TR__' + date, amount: 0 });
     } else {
       const descInp = tr.querySelector('.item-desc-val');
@@ -1400,24 +1399,31 @@ async function saveVoucher() {
   if (!fromCode) { showToast('กรุณาเลือกบัญชีลูกค้า (รับจาก)', 'error'); return; }
   if (!accountCode) { showToast('กรุณาเลือกบัญชีธนาคาร (ของเรา)', 'error'); return; }
   if (!items.length) { showToast('กรุณาเพิ่มรายการอย่างน้อย 1 รายการ', 'error'); return; }
+  // ตรวจ TR rows ว่ามีวันที่ครบ
+  const trMissing = items.filter(it => it.type === 'tr' && !it.date);
+  if (trMissing.length) { showToast('กรุณาระบุวันที่โอนในทุกแถว TR', 'error'); return; }
+  // ตรวจ normal items มี description/amount
+  const normalItems = items.filter(it => it.type !== 'tr');
+  if (!normalItems.length) { showToast('กรุณาเพิ่มรายการอย่างน้อย 1 รายการ (ไม่นับ TR)', 'error'); return; }
+  const zeroItems = normalItems.filter(it => !it.amount || it.amount === 0);
+  // allow zero amount — some items may legitimately be 0
 
-  // Check duplicate ref (only for normal format - TR can repeat)
-// Check duplicate ref (normal format ห้ามซ้ำ, TR ซ้ำได้)
-if (ref && refFormat === 'normal') {
-  const refNorm = ref.trim().toLowerCase();
-  const duplicate = allVouchers.find(v => {
-    const r = formatRef(v.voucherRef || '').trim().toLowerCase();
-    return r === refNorm;
-  });
-  if (duplicate) {
-    showToast(`❌ เลขที่ "${ref}" ซ้ำกับรายการที่มีอยู่แล้ว กรุณาแก้ไข`, 'error');
-    const refEl = document.getElementById('f-ref');
-    refEl.style.borderColor = 'var(--red)';
-    refEl.style.boxShadow = '0 0 0 3px rgba(192,57,43,0.15)';
-    refEl.focus(); refEl.select();
-    setTimeout(() => { refEl.style.borderColor = ''; refEl.style.boxShadow = ''; }, 3000);
-    return;
-  }
+  // ห้ามซ้ำทั้ง normal และ TR
+  if (ref) {
+    const refNorm = ref.trim().toLowerCase();
+    const duplicate = allVouchers.find(v => {
+      const r = formatRef(v.voucherRef || '').trim().toLowerCase();
+      return r === refNorm;
+    });
+    if (duplicate) {
+      showToast('❌ เลขที่ "' + ref + '" ซ้ำกับรายการที่มีอยู่แล้ว กรุณาแก้ไข', 'error');
+      const refEl = document.getElementById('f-ref');
+      refEl.style.borderColor = 'var(--red)';
+      refEl.style.boxShadow = '0 0 0 3px rgba(192,57,43,0.15)';
+      refEl.focus(); refEl.select();
+      setTimeout(() => { refEl.style.borderColor = ''; refEl.style.boxShadow = ''; }, 3000);
+      return;
+    }
   }
 
   const account = allAccounts.find(a => a.code === accountCode);
@@ -1467,9 +1473,9 @@ function setRefFormat(fmt) {
   const hint      = document.getElementById('ref-hint');
   if (btnNormal) btnNormal.className = fmt === 'normal' ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
   if (btnTR)     btnTR.className     = fmt === 'tr'     ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
-  // if (hint) hint.textContent = fmt === 'tr'
-  //   ? 'TR: เดือน/ปี เช่น 12/2026 — แก้ไขได้'
-  //   : 'ปกติ: 001/เดือน/ปี — ห้ามซ้ำ แก้ไขได้';
+  if (hint) hint.textContent = fmt === 'tr'
+    ? 'TR: เดือน/ปี เช่น 12/2026 — แก้ไขได้'
+    : 'ปกติ: 001/เดือน/ปี — ห้ามซ้ำ แก้ไขได้';
   generateRef();
 }
 
@@ -1478,14 +1484,13 @@ function generateRef() {
   const d = dateVal ? new Date(dateVal + 'T00:00:00') : new Date();
   const mm   = String(d.getMonth() + 1).padStart(2, '0');
   const yy   = String(d.getFullYear()).slice(-2);
-  const yyyy = d.getFullYear();
   const el = document.getElementById('f-ref');
   if (!el) return;
+  const seq = getNextSeq();
   if (refFormat === 'tr') {
-    el.value = `${mm}/${yyyy}`;
+    el.value = seq + '/TR/' + mm + '/' + yy;  // e.g. 001/TR/04/26
   } else {
-    const seq = getNextSeq();
-    el.value = `${seq}/${mm}/${yy}`;   // e.g. 001/04/26
+    el.value = seq + '/' + mm + '/' + yy;     // e.g. 001/04/26
   }
 }
 
@@ -1493,8 +1498,8 @@ function getNextSeq() {
   let max = 0;
   allVouchers.forEach(v => {
     const ref = formatRef(v.voucherRef || '');
-    // only count normal format refs: NNN/MM/YY
-    const m = ref.match(/^(\d{1,4})\/\d{2}\/\d{2}$/);
+    // match both normal (001/04/26) and TR (001/TR/04/26)
+    const m = ref.match(/^(\d{1,4})\//);
     if (m) max = Math.max(max, parseInt(m[1]));
   });
   return String(max + 1).padStart(3, '0');
@@ -1631,7 +1636,7 @@ async function saveCustomerAccount() {
       showToast('✅ เพิ่มบัญชีลูกค้าสำเร็จ', 'success');
       document.getElementById('cust-bank').value = '';
       document.getElementById('cust-number').value = '';
-      loadCustomerAccounts();
+      await loadCustomerAccounts();
     } else throw new Error(res.message);
   } catch(e) { showToast('❌ ' + e.message, 'error'); }
 }
@@ -1685,7 +1690,7 @@ async function saveAccount() {
       showToast('✅ เพิ่มบัญชีสำเร็จ', 'success');
       document.getElementById('acc-bank').value = '';
       document.getElementById('acc-number').value = '';
-      loadAccounts();
+      await loadAccounts();
     } else throw new Error(res.message);
   } catch (e) { showToast('❌ ' + e.message, 'error'); }
 }
@@ -1884,15 +1889,22 @@ function bahtText(amount) {
 function formatRef(val) {
   if (!val) return '';
   const s = String(val).trim();
-  // Normal format: 001/04/26 ✅
-  if (/^\d{1,4}\/\d{2}\/\d{2}$/.test(s)) return s;
-  // TR format: 04/2026 ✅
+  // Already correct normal format: 001/04/26
+  if (/^\d{3}\/\d{2}\/\d{2}$/.test(s)) return s;
+  // Already correct TR format: 04/2026
   if (/^\d{2}\/\d{4}$/.test(s)) return s;
-  // Sheets date string fallback: yyyy-MM-dd → MM/yyyy
-  if (/^\d{4}-\d{2}-\d{2}(T.*)?$/.test(s)) {
+  // Sheets returned YYYY/MM/DD (e.g. 2001/04/26 from "001/04/26") → show as MM/YYYY
+  if (/^\d{4}\/\d{2}\/\d{2}$/.test(s)) {
+    const p = s.split('/');
+    return p[1] + '/' + p[0]; // 04/2001 → shows origin month/year
+  }
+  // ISO date string from Sheets → MM/YYYY
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s) || /^\d{4}-\d{2}-\d{2}$/.test(s)) {
     const d = new Date(s);
     if (!isNaN(d)) return String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
   }
+  // MM/YYYY from Sheets date format
+  if (/^\d{2}\/\d{4}$/.test(s)) return s;
   return s;
 }
 
