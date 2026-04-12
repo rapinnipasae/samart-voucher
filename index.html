@@ -688,6 +688,7 @@
           <label>ค้นหา</label>
           <input type="text" id="search-input" placeholder="เลขที่ / รับจาก ..." oninput="applyFilters()">
           <button class="btn btn-outline btn-sm" onclick="clearFilters()">✕ ล้าง</button>
+          <button class="btn btn-outline btn-sm" id="filter-tr-btn" onclick="toggleTRFilter()" title="แสดงเฉพาะใบ TR">🔄 TR</button>
           <span class="filter-count" id="filter-count"></span>
         </div>
         <div id="voucher-list-wrap">
@@ -716,7 +717,7 @@
               </div>
             </div>
             <input type="text" class="form-input" id="f-ref" placeholder="สร้างอัตโนมัติ...">
-            <!-- <span style="font-size:11px;color:var(--text-light);margin-top:3px" id="ref-hint">ปกติ: 001/เดือน/ปี — แก้ไขได้</span> -->
+            <span style="font-size:11px;color:var(--text-light);margin-top:3px" id="ref-hint">ปกติ: 001/เดือน/ปี — แก้ไขได้</span>
           </div>
           <div class="form-group">
             <label class="form-label">รับจาก <span style="font-weight:400;color:var(--text-light)">(ธนาคารลูกค้า)</span> *</label>
@@ -786,7 +787,7 @@
           </div>
           <div class="form-group">
             <label class="form-label">เลขที่บัญชี</label>
-            <input type="text" class="form-input" id="acc-number" placeholder="101-1-01010-1" maxlength="13" oninput="formatAccNumber(this)">
+            <input type="text" class="form-input" id="acc-number" placeholder="101-1-01010-1 (ไม่บังคับ)" maxlength="13" oninput="formatAccNumber(this)">
           </div>
           <button class="btn btn-primary" onclick="saveAccount()" style="height:42px">＋ เพิ่ม</button>
         </div>
@@ -814,7 +815,7 @@
           </div>
           <div class="form-group">
             <label class="form-label">เลขที่บัญชี</label>
-            <input type="text" class="form-input" id="cust-number" placeholder="099-2-98523-2" maxlength="13" oninput="formatAccNumber(this)">
+            <input type="text" class="form-input" id="cust-number" placeholder="099-2-98523-2 (ไม่บังคับ)" maxlength="13" oninput="formatAccNumber(this)">
           </div>
           <button class="btn btn-primary" onclick="saveCustomerAccount()" style="height:42px">＋ เพิ่ม</button>
         </div>
@@ -913,6 +914,7 @@ let allAccounts = [];
 let allCustomerAccounts = [];
 let itemCount = 0;
 let refFormat = 'normal'; // 'normal' | 'tr'
+let trFilterOn = false; // dashboard TR filter
 
 // Combo options — description only (receivedFrom now uses CustomerAccounts sheet)
 let comboOptions = {
@@ -1036,7 +1038,6 @@ async function loadVouchers() {
     const res = await apiGet('getVouchers');
     if (res.success) {
       allVouchers = res.data || [];
-      generateRef();
       populateYearFilter(allVouchers);
       applyFilters();
       updateStats(allVouchers);
@@ -1094,6 +1095,13 @@ function updateStats(data) {
   }
 }
 
+function toggleTRFilter() {
+  trFilterOn = !trFilterOn;
+  const btn = document.getElementById('filter-tr-btn');
+  if (btn) btn.className = trFilterOn ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
+  applyFilters();
+}
+
 function applyFilters() {
   const year  = document.getElementById('filter-year').value;
   const month = document.getElementById('filter-month').value;
@@ -1104,16 +1112,25 @@ function applyFilters() {
     if (year  && d && String(d.getFullYear()) !== year)  return false;
     if (month && d && String(d.getMonth() + 1) !== month) return false;
     if (q && !(v.voucherId + (v.voucherRef||'') + v.receivedFrom + (v.accountLabel||'')).toLowerCase().includes(q)) return false;
+    // TR filter: แสดงเฉพาะ ref ที่เป็น MM/YYYY format
+    if (trFilterOn) {
+      const ref = formatRef(v.voucherRef || '');
+      const isTR = /^\d{2}\/\d{4}$/.test(ref.trim());
+      if (!isTR) return false;
+    }
     return true;
   });
   renderVoucherTable(filtered);
-  document.getElementById('filter-count').textContent = `แสดง ${filtered.length} / ${allVouchers.length} รายการ`;
+  document.getElementById('filter-count').textContent = `แสดง ${filtered.length} / ${allVouchers.length} รายการ${trFilterOn ? ' (TR เท่านั้น)' : ''}`;
 }
 
 function clearFilters() {
   document.getElementById('filter-year').value = '';
   document.getElementById('filter-month').value = '';
   document.getElementById('search-input').value = '';
+  trFilterOn = false;
+  const btn = document.getElementById('filter-tr-btn');
+  if (btn) btn.className = 'btn btn-outline btn-sm';
   applyFilters();
 }
 
@@ -1645,8 +1662,8 @@ let editingCustomerCode = null;
 async function saveCustomerAccount() {
   const bank = document.getElementById('cust-bank').value.trim();
   const number = document.getElementById('cust-number').value.trim();
-  if (!bank || !number) { showToast('กรุณากรอกข้อมูลให้ครบ', 'error'); return; }
-  const code = (bank + '_' + number.replace(/-/g,'')).slice(0, 20);
+  if (!bank) { showToast('กรุณากรอกชื่อธนาคาร', 'error'); return; }
+  const code = (bank + '_' + (number || 'NONUM').replace(/-/g,'')).slice(0, 20);
   const btn = document.querySelector('[onclick="saveCustomerAccount()"]');
   if (btn) { btn.innerHTML = '<span class="spinner"></span> กำลังบันทึก...'; btn.disabled = true; }
   try {
@@ -1676,7 +1693,7 @@ function editCustomerAccount(code, bank, number) {
 async function updateCustomerAccount() {
   const bank = document.getElementById('cust-bank').value.trim();
   const number = document.getElementById('cust-number').value.trim();
-  if (!bank || !number) { showToast('กรุณากรอกข้อมูลให้ครบ', 'error'); return; }
+  if (!bank) { showToast('กรุณากรอกชื่อธนาคาร', 'error'); return; }
   const btn = document.querySelector('[onclick="updateCustomerAccount()"]');
   if (btn) { btn.innerHTML = '<span class="spinner"></span> กำลังบันทึก...'; btn.disabled = true; }
   try {
@@ -1707,8 +1724,8 @@ async function deleteCustomerAccount(code) {
 async function saveAccount() {
   const bank = document.getElementById('acc-bank').value.trim();
   const number = document.getElementById('acc-number').value.trim();
-  if (!bank || !number) { showToast('กรุณากรอกข้อมูลให้ครบ', 'error'); return; }
-  const code = (bank + '_' + number.replace(/-/g,'')).slice(0, 20);
+  if (!bank) { showToast('กรุณากรอกชื่อธนาคาร', 'error'); return; }
+  const code = (bank + '_' + (number || 'NONUM').replace(/-/g,'')).slice(0, 20);
   const btn = document.querySelector('[onclick="saveAccount()"]');
   if (btn) { btn.innerHTML = '<span class="spinner"></span> กำลังบันทึก...'; btn.disabled = true; }
   try {
@@ -1748,7 +1765,7 @@ function editAccount(code, bank, number) {
 async function updateAccount() {
   const bank = document.getElementById('acc-bank').value.trim();
   const number = document.getElementById('acc-number').value.trim();
-  if (!bank || !number) { showToast('กรุณากรอกข้อมูลให้ครบ', 'error'); return; }
+  if (!bank) { showToast('กรุณากรอกชื่อธนาคาร', 'error'); return; }
   const btn = document.querySelector('[onclick="updateAccount()"]');
   if (btn) { btn.innerHTML = '<span class="spinner"></span> กำลังบันทึก...'; btn.disabled = true; }
   try {
