@@ -716,7 +716,7 @@
               </div>
             </div>
             <input type="text" class="form-input" id="f-ref" placeholder="สร้างอัตโนมัติ...">
-            <span style="font-size:11px;color:var(--text-light);margin-top:3px" id="ref-hint">ปกติ: 001/เดือน/ปี — แก้ไขได้</span>
+            <!-- <span style="font-size:11px;color:var(--text-light);margin-top:3px" id="ref-hint">ปกติ: 001/เดือน/ปี — แก้ไขได้</span> -->
           </div>
           <div class="form-group">
             <label class="form-label">รับจาก <span style="font-weight:400;color:var(--text-light)">(ธนาคารลูกค้า)</span> *</label>
@@ -1473,9 +1473,9 @@ function setRefFormat(fmt) {
   const hint      = document.getElementById('ref-hint');
   if (btnNormal) btnNormal.className = fmt === 'normal' ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
   if (btnTR)     btnTR.className     = fmt === 'tr'     ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
-  if (hint) hint.textContent = fmt === 'tr'
-    ? 'TR: เดือน/ปี เช่น 12/2026 — แก้ไขได้'
-    : 'ปกติ: 001/เดือน/ปี — ห้ามซ้ำ แก้ไขได้';
+  // if (hint) hint.textContent = fmt === 'tr'
+  //   ? 'TR: เดือน/ปี เช่น 12/2026 — แก้ไขได้'
+  //   : 'ปกติ: 001/เดือน/ปี — ห้ามซ้ำ แก้ไขได้';
   generateRef();
 }
 
