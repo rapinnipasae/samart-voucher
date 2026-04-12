@@ -716,7 +716,7 @@
               </div>
             </div>
             <input type="text" class="form-input" id="f-ref" placeholder="สร้างอัตโนมัติ...">
-            <!-- <span style="font-size:11px;color:var(--text-light);margin-top:3px" id="ref-hint">ปกติ: 001/เดือน/ปี — แก้ไขได้</span> -->
+            <span style="font-size:11px;color:var(--text-light);margin-top:3px" id="ref-hint">ปกติ: 001/เดือน/ปี — แก้ไขได้</span>
           </div>
           <div class="form-group">
             <label class="form-label">รับจาก <span style="font-weight:400;color:var(--text-light)">(ธนาคารลูกค้า)</span> *</label>
@@ -1473,9 +1473,9 @@ function setRefFormat(fmt) {
   const hint      = document.getElementById('ref-hint');
   if (btnNormal) btnNormal.className = fmt === 'normal' ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
   if (btnTR)     btnTR.className     = fmt === 'tr'     ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
-  // if (hint) hint.textContent = fmt === 'tr'
-  //   ? 'TR: เดือน/ปี เช่น 12/2026 — แก้ไขได้'
-  //   : 'ปกติ: 001/เดือน/ปี — ห้ามซ้ำ แก้ไขได้';
+  if (hint) hint.textContent = fmt === 'tr'
+    ? 'TR: เดือน/ปี เช่น 12/2026 — แก้ไขได้'
+    : 'ปกติ: 001/เดือน/ปี — ห้ามซ้ำ แก้ไขได้';
   generateRef();
 }
 
@@ -1512,6 +1512,7 @@ async function loadAccounts() {
     wrap.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div><p>กรุณาตั้งค่า Script URL ก่อน</p></div>';
     return;
   }
+  wrap.innerHTML = '<div class="empty-state"><div class="icon">⏳</div><p>กำลังโหลด...</p></div>';
   try {
     const res = await apiGet('getAccounts');
     if (res.success) {
@@ -1571,6 +1572,7 @@ async function loadCustomerAccounts() {
     if (wrap) wrap.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div><p>กรุณาตั้งค่า Script URL ก่อน</p></div>';
     return;
   }
+  if (wrap) wrap.innerHTML = '<div class="empty-state"><div class="icon">⏳</div><p>กำลังโหลด...</p></div>';
   try {
     const res = await apiGet('getCustomerAccounts');
     if (res.success) {
@@ -1630,6 +1632,8 @@ async function saveCustomerAccount() {
   const number = document.getElementById('cust-number').value.trim();
   if (!bank || !number) { showToast('กรุณากรอกข้อมูลให้ครบ', 'error'); return; }
   const code = (bank + '_' + number.replace(/-/g,'')).slice(0, 20);
+  const btn = document.querySelector('[onclick="saveCustomerAccount()"]');
+  if (btn) { btn.innerHTML = '<span class="spinner"></span> กำลังบันทึก...'; btn.disabled = true; }
   try {
     const res = await api('createCustomerAccount', { code, bank, number });
     if (res.success) {
@@ -1639,6 +1643,9 @@ async function saveCustomerAccount() {
       await loadCustomerAccounts();
     } else throw new Error(res.message);
   } catch(e) { showToast('❌ ' + e.message, 'error'); }
+  finally {
+    if (btn) { btn.innerHTML = '＋ เพิ่ม'; btn.disabled = false; }
+  }
 }
 
 function editCustomerAccount(code, bank, number) {
@@ -1682,8 +1689,9 @@ async function saveAccount() {
   const bank = document.getElementById('acc-bank').value.trim();
   const number = document.getElementById('acc-number').value.trim();
   if (!bank || !number) { showToast('กรุณากรอกข้อมูลให้ครบ', 'error'); return; }
-  // auto-generate code from bank+number
   const code = (bank + '_' + number.replace(/-/g,'')).slice(0, 20);
+  const btn = document.querySelector('[onclick="saveAccount()"]');
+  if (btn) { btn.innerHTML = '<span class="spinner"></span> กำลังบันทึก...'; btn.disabled = true; }
   try {
     const res = await api('createAccount', { code, bank, number });
     if (res.success) {
@@ -1693,6 +1701,9 @@ async function saveAccount() {
       await loadAccounts();
     } else throw new Error(res.message);
   } catch (e) { showToast('❌ ' + e.message, 'error'); }
+  finally {
+    if (btn) { btn.innerHTML = '＋ เพิ่ม'; btn.disabled = false; }
+  }
 }
 
 function formatAccNumber(input) {
