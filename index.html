@@ -1624,10 +1624,12 @@ function renderAccountSdropOptions(uid, filter) {
   wrap.innerHTML = items.map(a => {
     const label = a.bank + (a.number ? ' ' + a.number : '');
     const sel = a.code === cur ? ' selected' : '';
-    const safeCode = a.code.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-    const safeLabel = label.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-    return '<div class="sdrop-option' + sel + '" onclick="selectAccountSdrop('' + uid + '','' + safeCode + '','' + safeLabel + '')">' + label + '</div>';
+    return '<div class="sdrop-option' + sel + '" data-uid="' + uid + '" data-code="' + a.code.replace(/"/g,'&quot;') + '" data-label="' + label.replace(/"/g,'&quot;') + '" onclick="selectAccountSdropEl(this)">' + label + '</div>';
   }).join('');
+}
+
+function selectAccountSdropEl(el) {
+  selectAccountSdrop(el.dataset.uid, el.dataset.code, el.dataset.label);
 }
 
 function toggleAccountSdrop(uid) {
