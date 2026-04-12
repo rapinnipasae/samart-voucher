@@ -1036,6 +1036,7 @@ async function loadVouchers() {
     const res = await apiGet('getVouchers');
     if (res.success) {
       allVouchers = res.data || [];
+      generateRef();
       populateYearFilter(allVouchers);
       applyFilters();
       updateStats(allVouchers);
