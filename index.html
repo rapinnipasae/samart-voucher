@@ -716,7 +716,7 @@
               </div>
             </div>
             <input type="text" class="form-input" id="f-ref" placeholder="สร้างอัตโนมัติ...">
-            <!-- <span style="font-size:11px;color:var(--text-light);margin-top:3px" id="ref-hint">ปกติ: 001/เดือน/ปี — แก้ไขได้</span> -->
+            <span style="font-size:11px;color:var(--text-light);margin-top:3px" id="ref-hint">ปกติ: 001/เดือน/ปี — แก้ไขได้</span>
           </div>
           <div class="form-group">
             <label class="form-label">รับจาก <span style="font-weight:400;color:var(--text-light)">(ธนาคารลูกค้า)</span> *</label>
@@ -1036,7 +1036,6 @@ async function loadVouchers() {
     const res = await apiGet('getVouchers');
     if (res.success) {
       allVouchers = res.data || [];
-      generateRef();
       populateYearFilter(allVouchers);
       applyFilters();
       updateStats(allVouchers);
@@ -1322,6 +1321,7 @@ function renumberItems() {
 
 async function deleteVoucher(voucherId) {
   if (!confirm('ยืนยันลบใบสำคัญนี้?')) return;
+  showToast('⏳ กำลังลบ...', 'success');
   try {
     const res = await api('deleteVoucher', { voucherId });
     if (res.success) {
@@ -1409,15 +1409,20 @@ async function saveVoucher() {
   const zeroItems = normalItems.filter(it => !it.amount || it.amount === 0);
   // allow zero amount — some items may legitimately be 0
 
-  // ห้ามซ้ำทั้ง normal และ TR
+  // ห้ามซ้ำ: normal ห้ามซ้ำทุกกรณี, TR ห้ามซ้ำในเดือนเดียวกัน
   if (ref) {
     const refNorm = ref.trim().toLowerCase();
+    const isTRRef = /^\d{2}\/\d{4}$/.test(ref.trim());
     const duplicate = allVouchers.find(v => {
       const r = formatRef(v.voucherRef || '').trim().toLowerCase();
+      if (isTRRef) return r === refNorm; // TR: ห้ามซ้ำ ref เดียวกัน (เดือน/ปีเดียวกัน)
       return r === refNorm;
     });
     if (duplicate) {
-      showToast('❌ เลขที่ "' + ref + '" ซ้ำกับรายการที่มีอยู่แล้ว กรุณาแก้ไข', 'error');
+      const msg = isTRRef
+        ? '❌ เลขที่ TR "' + ref + '" ซ้ำในเดือนนี้ กรุณาตรวจสอบ'
+        : '❌ เลขที่ "' + ref + '" ซ้ำกับรายการที่มีอยู่แล้ว กรุณาแก้ไข';
+      showToast(msg, 'error');
       const refEl = document.getElementById('f-ref');
       refEl.style.borderColor = 'var(--red)';
       refEl.style.boxShadow = '0 0 0 3px rgba(192,57,43,0.15)';
@@ -1487,10 +1492,12 @@ function generateRef() {
   const yy   = String(d.getFullYear()).slice(-2);
   const el = document.getElementById('f-ref');
   if (!el) return;
-  const seq = getNextSeq();
   if (refFormat === 'tr') {
-    el.value = seq + '/TR/' + mm + '/' + yy;  // e.g. 001/TR/04/26
+    // TR: MM/YYYY เช่น 04/2026 — ซ้ำได้ต่างเดือน
+    const yyyy = d.getFullYear();
+    el.value = mm + '/' + yyyy;
   } else {
+    const seq = getNextSeq();
     el.value = seq + '/' + mm + '/' + yy;     // e.g. 001/04/26
   }
 }
@@ -1499,8 +1506,8 @@ function getNextSeq() {
   let max = 0;
   allVouchers.forEach(v => {
     const ref = formatRef(v.voucherRef || '');
-    // match both normal (001/04/26) and TR (001/TR/04/26)
-    const m = ref.match(/^(\d{1,4})\//);
+    // only count normal format: NNN/MM/YY
+    const m = ref.match(/^(\d{1,4})\/\d{2}\/\d{2}$/);
     if (m) max = Math.max(max, parseInt(m[1]));
   });
   return String(max + 1).padStart(3, '0');
@@ -1663,6 +1670,8 @@ async function updateCustomerAccount() {
   const bank = document.getElementById('cust-bank').value.trim();
   const number = document.getElementById('cust-number').value.trim();
   if (!bank || !number) { showToast('กรุณากรอกข้อมูลให้ครบ', 'error'); return; }
+  const btn = document.querySelector('[onclick="updateCustomerAccount()"]');
+  if (btn) { btn.innerHTML = '<span class="spinner"></span> กำลังบันทึก...'; btn.disabled = true; }
   try {
     const res = await api('updateCustomerAccount', { code: editingCustomerCode, bank, number });
     if (res.success) {
@@ -1670,11 +1679,13 @@ async function updateCustomerAccount() {
       editingCustomerCode = null;
       document.getElementById('cust-bank').value = '';
       document.getElementById('cust-number').value = '';
-      const btn = document.querySelector('[onclick="updateCustomerAccount()"]');
-      if (btn) { btn.textContent = '＋ เพิ่ม'; btn.onclick = saveCustomerAccount; }
-      loadCustomerAccounts();
+      if (btn) { btn.textContent = '＋ เพิ่ม'; btn.onclick = saveCustomerAccount; btn.disabled = false; }
+      await loadCustomerAccounts();
     } else throw new Error(res.message);
-  } catch(e) { showToast('❌ ' + e.message, 'error'); }
+  } catch(e) {
+    showToast('❌ ' + e.message, 'error');
+    if (btn) { btn.innerHTML = '💾 บันทึก'; btn.disabled = false; }
+  }
 }
 
 async function deleteCustomerAccount(code) {
@@ -1731,14 +1742,19 @@ async function updateAccount() {
   const bank = document.getElementById('acc-bank').value.trim();
   const number = document.getElementById('acc-number').value.trim();
   if (!bank || !number) { showToast('กรุณากรอกข้อมูลให้ครบ', 'error'); return; }
+  const btn = document.querySelector('[onclick="updateAccount()"]');
+  if (btn) { btn.innerHTML = '<span class="spinner"></span> กำลังบันทึก...'; btn.disabled = true; }
   try {
     const res = await api('updateAccount', { code: editingAccountCode, bank, number });
     if (res.success) {
       showToast('✅ แก้ไขบัญชีสำเร็จ', 'success');
       resetAccountForm();
-      loadAccounts();
+      await loadAccounts();
     } else throw new Error(res.message);
   } catch (e) { showToast('❌ ' + e.message, 'error'); }
+  finally {
+    if (btn) { btn.innerHTML = '💾 บันทึก'; btn.disabled = false; }
+  }
 }
 
 async function deleteAccount(code) {
