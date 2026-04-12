@@ -1,454 +1,2017 @@
-// ============================================================
-//  SAMART VOUCHER SYSTEM - Google Apps Script Backend
-//  วิธีใช้: นำโค้ดนี้ไปวางใน Google Apps Script แล้ว Deploy เป็น Web App
-// ============================================================
-
-const SHEET_NAME_VOUCHERS = 'Vouchers';
-const SHEET_NAME_ITEMS = 'VoucherItems';
-const SHEET_NAME_ACCOUNTS = 'Accounts';
-const SHEET_NAME_CUSTOMER_ACCOUNTS = 'CustomerAccounts';
-const SHEET_NAME_OPTIONS = 'Options';
-const SPREADSHEET_ID = '18ezpCmiT3WIaYW_eXtpP-oFs27len-JigLkEeksDvVM';
-
-function getSpreadsheet() {
-  return SpreadsheetApp.openById(SPREADSHEET_ID);
-}
-
-// ---- SETUP: สร้าง Sheet ครั้งแรก ----
-function setup() {
-  const ss = getSpreadsheet();
-  
-  // Vouchers sheet
-  let vSheet = ss.getSheetByName(SHEET_NAME_VOUCHERS);
-  if (!vSheet) {
-    vSheet = ss.insertSheet(SHEET_NAME_VOUCHERS);
-    vSheet.getRange(1, 1, 1, 9).setValues([[
-      'VoucherID', 'Date', 'VoucherRef', 'ReceivedFrom', 'AccountCode', 'AccountLabel', 'Note', 'Total', 'CreatedAt'
-    ]]);
-    vSheet.getRange(1, 1, 1, 9).setFontWeight('bold').setBackground('#1b2d45').setFontColor('#ffffff');
-    vSheet.setFrozenRows(1);
-  }
-  // Force VoucherRef column (C) เป็น plain text ทั้งคอลัมน์ — ป้องกัน date auto-convert
-  vSheet.getRange(1, 3, 1000, 1).setNumberFormat('@STRING@');
-
-  // VoucherItems sheet
-  let iSheet = ss.getSheetByName(SHEET_NAME_ITEMS);
-  if (!iSheet) {
-    iSheet = ss.insertSheet(SHEET_NAME_ITEMS);
-    iSheet.getRange(1, 1, 1, 4).setValues([[
-      'VoucherID', 'ItemNo', 'Description', 'Amount'
-    ]]);
-    iSheet.getRange(1, 1, 1, 4).setFontWeight('bold').setBackground('#1b2d45').setFontColor('#ffffff');
-    iSheet.setFrozenRows(1);
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ระบบใบสำคัญรับเงิน</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Noto+Serif+Thai:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0d1b2a;
+    --navy-mid: #1b2d45;
+    --navy-light: #243b55;
+    --gold: #c9a84c;
+    --gold-light: #e8c97a;
+    --cream: #f8f5ef;
+    --cream-dark: #ede8df;
+    --text-dark: #1a1a2e;
+    --text-mid: #4a4a6a;
+    --text-light: #8888aa;
+    --white: #ffffff;
+    --red: #c0392b;
+    --green: #1a6b3c;
+    --border: #ddd8cc;
   }
 
-  // Accounts sheet
-  let aSheet = ss.getSheetByName(SHEET_NAME_ACCOUNTS);
-  if (!aSheet) {
-    aSheet = ss.insertSheet(SHEET_NAME_ACCOUNTS);
-    aSheet.getRange(1, 1, 1, 4).setValues([[
-      'Code', 'Bank', 'AccountNumber', 'Type'
-    ]]);
-    aSheet.getRange(1, 1, 1, 4).setFontWeight('bold').setBackground('#1b2d45').setFontColor('#ffffff');
-    aSheet.setFrozenRows(1);
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Sarabun', sans-serif;
+    background: var(--cream);
+    color: var(--text-dark);
+    min-height: 100vh;
   }
 
-  // Options sheet
-  let oSheet = ss.getSheetByName(SHEET_NAME_OPTIONS);
-  if (!oSheet) {
-    oSheet = ss.insertSheet(SHEET_NAME_OPTIONS);
-    oSheet.getRange(1,1,1,2).setValues([['Key','Values']]);
-    oSheet.getRange(1,1,1,2).setFontWeight('bold').setBackground('#1b2d45').setFontColor('#ffffff');
-    oSheet.setFrozenRows(1);
-    // default values
-    oSheet.appendRow(['receivedFrom', 'BBL,SCB,KTB,KBANK,GSB']);
-    oSheet.appendRow(['description',  'รับคืนภาษีหัก ณ ที่จ่าย,ค่าธรรมเนียม,Service Fee,เงินรับล่วงหน้า']);
+  /* SIDEBAR */
+  .layout { display: flex; min-height: 100vh; }
+
+  .sidebar {
+    width: 240px;
+    background: var(--navy);
+    color: var(--white);
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    z-index: 100;
   }
 
-  // CustomerAccounts sheet
-  let caSheet = ss.getSheetByName(SHEET_NAME_CUSTOMER_ACCOUNTS);
-  if (!caSheet) {
-    caSheet = ss.insertSheet(SHEET_NAME_CUSTOMER_ACCOUNTS);
-    caSheet.getRange(1,1,1,3).setValues([['Code','Bank','AccountNumber']]);
-    caSheet.getRange(1,1,1,3).setFontWeight('bold').setBackground('#1b2d45').setFontColor('#ffffff');
-    caSheet.setFrozenRows(1);
+  .sidebar-logo {
+    padding: 28px 24px 20px;
+    border-bottom: 1px solid rgba(201,168,76,0.3);
+  }
+  .sidebar-logo .company-th {
+    font-family: 'Noto Serif Thai', serif;
+    font-size: 12px;
+    color: var(--gold-light);
+    line-height: 1.6;
+    margin-bottom: 4px;
+  }
+  .sidebar-logo .system-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--white);
+    letter-spacing: 0.5px;
+  }
+  .sidebar-logo .gold-bar {
+    width: 32px; height: 2px;
+    background: var(--gold);
+    margin-top: 12px;
+    border-radius: 2px;
   }
 
-  return 'Setup complete!';
+  .sidebar-nav { flex: 1; padding: 16px 0; }
+  .nav-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    color: var(--gold);
+    padding: 12px 24px 6px;
+    text-transform: uppercase;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 11px 24px;
+    cursor: pointer;
+    font-size: 14px;
+    color: rgba(255,255,255,0.7);
+    transition: all 0.2s;
+    border-left: 3px solid transparent;
+  }
+  .nav-item:hover { background: rgba(255,255,255,0.06); color: var(--white); }
+  .nav-item.active {
+    background: rgba(201,168,76,0.12);
+    color: var(--gold-light);
+    border-left-color: var(--gold);
+  }
+  .nav-item .icon { width: 18px; text-align: center; font-size: 15px; }
+
+  .sidebar-footer {
+    padding: 16px 24px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    font-size: 11px;
+    color: rgba(255,255,255,0.3);
+  }
+
+  /* MAIN CONTENT */
+  .main {
+    margin-left: 240px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .topbar {
+    background: var(--white);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky; top: 0; z-index: 50;
+    box-shadow: 0 1px 8px rgba(0,0,0,0.06);
+  }
+  .page-title { font-size: 20px; font-weight: 700; color: var(--navy); }
+  .page-subtitle { font-size: 13px; color: var(--text-light); margin-top: 2px; }
+
+  .content { padding: 28px 32px; }
+
+  /* CONFIG BANNER */
+  .config-banner {
+    background: linear-gradient(135deg, #fff8e1, #fffde7);
+    border: 1px solid var(--gold);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .config-banner .icon { font-size: 20px; margin-top: 2px; }
+  .config-banner h3 { font-size: 14px; font-weight: 700; color: var(--navy); margin-bottom: 4px; }
+  .config-banner p { font-size: 13px; color: var(--text-mid); line-height: 1.6; }
+  .config-banner input {
+    width: 100%; margin-top: 8px; padding: 8px 12px;
+    border: 1px solid var(--gold); border-radius: 6px;
+    font-family: 'Sarabun', sans-serif; font-size: 13px;
+    background: white;
+  }
+  .config-banner button {
+    margin-top: 8px; padding: 7px 16px;
+    background: var(--gold); color: var(--navy);
+    border: none; border-radius: 6px;
+    font-family: 'Sarabun', sans-serif; font-size: 13px; font-weight: 600;
+    cursor: pointer;
+  }
+
+  /* CARDS */
+  .stats-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; margin-bottom: 24px; }
+  .stat-card {
+    background: var(--white);
+    border-radius: 10px;
+    padding: 20px 24px;
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+  .stat-card .label { font-size: 12px; color: var(--text-light); font-weight: 500; letter-spacing: 0.5px; margin-bottom: 8px; }
+  .stat-card .value { font-size: 26px; font-weight: 700; color: var(--navy); }
+  .stat-card .sub { font-size: 12px; color: var(--text-light); margin-top: 4px; }
+  .stat-card.gold .value { color: var(--gold); }
+
+  /* TABLE */
+  .card {
+    background: var(--white);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+  }
+  .card-header {
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-radius: 12px 12px 0 0;
+  }
+  .card-title { font-size: 15px; font-weight: 700; color: var(--navy); }
+
+  .search-box {
+    display: flex; gap: 10px; align-items: center;
+  }
+  .search-box input {
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-family: 'Sarabun', sans-serif;
+    font-size: 13px;
+    width: 220px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .search-box input:focus { border-color: var(--navy); }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead tr { background: var(--cream); }
+  thead th:first-child { border-radius: 0; }
+  thead th:last-child { border-radius: 0; }
+  thead th {
+    padding: 12px 16px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-light);
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+  }
+  tbody tr {
+    border-bottom: 1px solid #f0ede8;
+    transition: background 0.15s;
+  }
+  tbody tr:hover { background: #f9f7f4; }
+  tbody tr:last-child { border-bottom: none; }
+  td {
+    padding: 13px 16px;
+    font-size: 14px;
+    color: var(--text-dark);
+  }
+  td.amount { font-weight: 600; color: var(--navy); text-align: right; font-size: 15px; }
+  td.ref { font-size: 12px; color: var(--text-light); }
+
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .badge.draft { background: #f0f4ff; color: #3b5bdb; }
+  .badge.approved { background: #e6f9ed; color: #1a6b3c; }
+
+  /* BUTTONS */
+  .btn {
+    padding: 8px 18px;
+    border-radius: 8px;
+    font-family: 'Sarabun', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn-primary {
+    background: var(--navy);
+    color: var(--white);
+  }
+  .btn-primary:hover { background: var(--navy-light); }
+  .btn-gold {
+    background: var(--gold);
+    color: var(--navy);
+  }
+  .btn-gold:hover { background: var(--gold-light); }
+  .btn-outline {
+    background: transparent;
+    color: var(--navy);
+    border: 1px solid var(--border);
+  }
+  .btn-outline:hover { background: var(--cream); }
+  .btn-sm { padding: 5px 12px; font-size: 12px; }
+  .btn-danger { background: #fff0f0; color: var(--red); border: 1px solid #ffcccc; }
+  .btn-danger:hover { background: #ffe0e0; }
+
+  .action-btns { display: flex; gap: 6px; }
+
+  /* FORM */
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: end; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group.full { grid-column: 1/-1; }
+  .form-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-mid);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .form-input {
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-family: 'Sarabun', sans-serif;
+    font-size: 14px;
+    color: var(--text-dark);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    background: white;
+  }
+  .form-input:focus {
+    border-color: var(--navy);
+    box-shadow: 0 0 0 3px rgba(13,27,42,0.08);
+  }
+
+  /* ITEMS TABLE in form */
+  .items-section { margin-top: 24px; }
+  .items-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .items-header h3 { font-size: 14px; font-weight: 700; color: var(--navy); }
+
+  .items-table-wrap { border: 1px solid var(--border); border-radius: 10px; overflow: visible; }
+  .items-table { width: 100%; border-collapse: collapse; border-radius: 10px; }
+  .items-table thead tr:first-child th:first-child { border-top-left-radius: 10px; }
+  .items-table thead tr:first-child th:last-child { border-top-right-radius: 10px; }
+  .items-table thead th {
+    background: var(--navy);
+    color: rgba(255,255,255,0.8);
+    padding: 10px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    border: none;
+  }
+  .items-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--border); position: relative; }
+  .items-table tbody tr:last-child td { border-bottom: none; }
+  .items-table input {
+    width: 100%;
+    padding: 7px 10px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    font-family: 'Sarabun', sans-serif;
+    font-size: 13px;
+    background: var(--cream);
+    transition: all 0.2s;
+  }
+  .items-table input:focus {
+    outline: none;
+    border-color: var(--navy);
+    background: white;
+    box-shadow: 0 0 0 2px rgba(13,27,42,0.06);
+  }
+  .items-table input.amount-input { text-align: right; }
+  .del-row { background: none; border: none; cursor: pointer; color: #ccc; font-size: 16px; padding: 4px 8px; border-radius: 4px; }
+  .del-row:hover { color: var(--red); background: #fff0f0; }
+  .reorder-btns { display: flex; flex-direction: column; gap: 1px; }
+  .reorder-btn { background: none; border: none; cursor: pointer; color: #ccc; font-size: 11px; padding: 1px 4px; line-height: 1; border-radius: 3px; }
+  .reorder-btn:hover { color: var(--navy); background: var(--cream); }
+  .tr-date-row td { background: linear-gradient(135deg, #fff8e1, #fffde7) !important; }
+  .tr-date-row .tr-date-label { font-size: 11px; font-weight: 700; color: var(--gold); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 3px; }
+  .tr-date-row input[type=date] { width: 100%; padding: 6px 10px; border: 1px solid var(--gold); border-radius: 6px; font-family: 'Sarabun', sans-serif; font-size: 13px; background: white; outline: none; }
+
+  .total-row {
+    background: var(--navy);
+    color: white;
+    font-weight: 700;
+  }
+  .total-row td { padding: 12px 14px; font-size: 15px; }
+
+  .form-actions {
+    display: flex; gap: 12px; justify-content: flex-end;
+    margin-top: 28px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* TOAST */
+  .toast {
+    position: fixed;
+    bottom: 32px; right: 32px;
+    background: var(--navy);
+    color: white;
+    padding: 14px 20px;
+    border-radius: 10px;
+    font-size: 14px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    display: none;
+    align-items: center;
+    gap: 10px;
+    z-index: 9999;
+    animation: slideUp 0.3s ease;
+  }
+  .toast.show { display: flex; }
+  .toast.success { border-left: 4px solid #2ecc71; }
+  .toast.error { border-left: 4px solid var(--red); }
+  @keyframes slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  /* PRINT MODAL */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 200;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(3px);
+  }
+  .modal-overlay.show { display: flex; }
+  .modal-box {
+    background: white;
+    border-radius: 14px;
+    padding: 28px;
+    width: 700px;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.25);
+  }
+  .modal-close {
+    position: absolute; top: 16px; right: 16px;
+    background: var(--cream); border: none; border-radius: 8px;
+    width: 32px; height: 32px; font-size: 16px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+  /* VOUCHER PRINT FORMAT */
+  .voucher-print {
+    font-family: 'Sarabun', sans-serif;
+    padding: 20px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+  }
+  .voucher-print .v-header { text-align: center; margin-bottom: 16px; }
+  .voucher-print .v-company-th { font-family: 'Noto Serif Thai'; font-size: 15px; font-weight: 700; }
+  .voucher-print .v-company-en { font-size: 13px; font-weight: 600; letter-spacing: 1px; }
+  .voucher-print .v-title { font-size: 16px; font-weight: 700; margin: 12px 0 8px; }
+  .voucher-print .v-to-row {
+    display: flex; justify-content: space-between;
+    font-size: 13px; margin-bottom: 12px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 8px;
+  }
+  .voucher-print .v-meta { font-size: 13px; margin-bottom: 6px; }
+  .voucher-print .v-meta strong { font-weight: 700; }
+  .voucher-print table {
+    width: 100%; border-collapse: collapse; margin: 14px 0;
+    font-size: 13px;
+  }
+  .voucher-print table th {
+    background: #f0f0f0; border: 1px solid #ccc;
+    padding: 8px 12px; text-align: center; font-weight: 700;
+  }
+  .voucher-print table td { border: 1px solid #ccc; padding: 7px 12px; }
+  .voucher-print table td.amt { text-align: right; }
+  .voucher-print .v-total-row { background: #f8f8f8; font-weight: 700; }
+  .voucher-print .v-sigs {
+    margin-top: 32px; font-size: 13px;
+  }
+  .voucher-print .v-sig-box {
+    display: flex; align-items: center; gap: 16px;
+    margin-bottom: 32px;
+  }
+  .voucher-print .v-sig-label { width: 80px; text-align: right; flex-shrink: 0; }
+  .voucher-print .v-sig-line {
+    flex: 1; border-bottom: 1px solid #333;
+    min-width: 200px;
+  }
+
+  /* SECTION pages */
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* Accounts */
+  .account-form-row {
+    display: grid;
+    grid-template-columns: 100px 1fr 1fr 1fr auto;
+    gap: 10px; align-items: end;
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .account-form-row:last-child { border-bottom: none; }
+
+  .empty-state {
+    padding: 48px;
+    text-align: center;
+    color: var(--text-light);
+  }
+  .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+  .empty-state p { font-size: 14px; }
+
+  /* Loading spinner */
+  .spinner {
+    display: inline-block;
+    width: 16px; height: 16px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ===== PRINT CSS ===== */
+  @page { size: A4; margin: 15mm; }
+  @media print {
+    body * { visibility: hidden !important; }
+    #print-area, #print-area * { visibility: visible !important; }
+    #print-area { position: fixed; top: 0; left: 0; width: 100%; }
+    .modal-actions { display: none !important; }
+    .v-sigs { display: block !important; }
+    .v-sig-box { margin-bottom: 40px !important; }
+  }
+
+  .divider { height: 1px; background: var(--border); margin: 24px 0; }
+
+  /* FILTER BAR */
+  .filter-bar {
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+    padding: 14px 24px; background: var(--cream);
+    border-bottom: 1px solid var(--border);
+  }
+  .filter-bar label { font-size: 12px; font-weight: 700; color: var(--text-mid); }
+  .filter-bar select, .filter-bar input[type=text] {
+    padding: 7px 12px; border: 1px solid var(--border);
+    border-radius: 8px; font-family: 'Sarabun', sans-serif;
+    font-size: 13px; background: white; outline: none;
+  }
+  .filter-bar select:focus, .filter-bar input:focus { border-color: var(--navy); }
+  .filter-count { margin-left: auto; font-size: 12px; color: var(--text-light); }
+
+  /* SEARCHABLE DROPDOWN */
+  .sdrop-wrap { position: relative; width: 100%; }
+  .sdrop-trigger {
+    width: 100%; padding: 10px 36px 10px 14px;
+    border: 1px solid var(--border); border-radius: 8px;
+    font-family: 'Sarabun', sans-serif; font-size: 14px;
+    background: white; outline: none; cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    text-align: left; color: var(--text-dark);
+    display: flex; align-items: center;
+    min-height: 42px; user-select: none;
+  }
+  .sdrop-trigger.placeholder { color: #aaa; }
+  .sdrop-trigger:hover, .sdrop-trigger:focus {
+    border-color: var(--navy);
+    box-shadow: 0 0 0 3px rgba(13,27,42,0.08);
+  }
+  .sdrop-trigger.item-trigger {
+    padding: 7px 28px 7px 10px; font-size: 13px;
+    background: var(--cream); border-color: transparent; min-height: 34px;
+  }
+  .sdrop-trigger.item-trigger:hover { background: white; border-color: var(--navy); }
+  .sdrop-arrow {
+    position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+    pointer-events: none; color: var(--text-light); font-size: 11px;
+  }
+  .sdrop-list {
+    display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+    background: white; border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.16); z-index: 1000;
+    max-height: 240px; overflow-y: auto;
+  }
+  .sdrop-list.open { display: block; }
+  .sdrop-search {
+    padding: 10px 12px; border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; background: white;
+  }
+  .sdrop-search input {
+    width: 100%; padding: 6px 10px;
+    border: 1px solid var(--border); border-radius: 6px;
+    font-family: 'Sarabun', sans-serif; font-size: 13px; outline: none;
+  }
+  .sdrop-search input:focus { border-color: var(--navy); }
+  .sdrop-option {
+    padding: 9px 14px; font-size: 14px; cursor: pointer;
+    transition: background 0.1s; font-family: 'Sarabun', sans-serif;
+  }
+  .sdrop-option:hover { background: var(--cream); }
+  .sdrop-option.selected { background: rgba(13,27,42,0.06); font-weight: 600; }
+  .sdrop-option.add-new {
+    color: var(--gold); font-weight: 600; border-top: 1px solid var(--border);
+    position: sticky; bottom: 0; background: white;
+  }
+  .sdrop-option.no-result { color: var(--text-light); font-style: italic; pointer-events: none; }
+
+  /* COMBOBOX add-new row */
+  .combo-new-row {
+    display: none; margin-top: 6px; gap: 6px; align-items: center;
+  }
+  .combo-new-row.show { display: flex; }
+  .combo-new-row input {
+    flex: 1; padding: 8px 12px;
+    border: 1px solid var(--gold); border-radius: 8px;
+    font-family: 'Sarabun', sans-serif; font-size: 13px; outline: none;
+  }
+  .combo-new-row button {
+    padding: 8px 14px; background: var(--gold); color: var(--navy);
+    border: none; border-radius: 8px;
+    font-family: 'Sarabun', sans-serif; font-size: 13px; font-weight: 700;
+    cursor: pointer; white-space: nowrap;
+  }
+
+  .tag-code {
+    display: inline-block;
+    background: var(--navy);
+    color: var(--gold-light);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.5px;
+  }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<div class="layout">
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <div class="company-th">บริษัท สามารถคอร์ปอเรชั่น จำกัด (มหาชน)</div>
+    <div class="system-name">ระบบใบสำคัญรับเงิน</div>
+    <div class="gold-bar"></div>
+  </div>
+  <div class="sidebar-nav">
+    <div class="nav-label">เมนูหลัก</div>
+    <div class="nav-item active" onclick="showPage('dashboard')">
+      <span class="icon">📋</span> รายการใบสำคัญ
+    </div>
+    <div class="nav-item" onclick="showPage('create')">
+      <span class="icon">✏️</span> สร้างใบสำคัญใหม่
+    </div>
+    <div class="nav-label">ตั้งค่า</div>
+    <div class="nav-item" onclick="showPage('accounts')">
+      <span class="icon">🏦</span> จัดการบัญชีธนาคาร
+    </div>
+    <div class="nav-item" onclick="showPage('options')">
+      <span class="icon">👤</span> บัญชีธนาคารลูกค้า
+    </div>
+    <div class="nav-item" onclick="showPage('settings')">
+      <span class="icon">⚙️</span> ตั้งค่าระบบ
+    </div>
+  </div>
+  <div class="sidebar-footer">
+    เวอร์ชัน 1.0 · ระบบเอกสารการเงิน
+  </div>
+</nav>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="topbar">
+    <div>
+      <div class="page-title" id="topbar-title">รายการใบสำคัญทั้งหมด</div>
+      <div class="page-subtitle" id="topbar-sub">ค้นหาและจัดการใบสำคัญรับเงิน</div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <span id="sync-status" style="font-size:12px;color:var(--text-light)"></span>
+      <button class="btn btn-gold" onclick="showPage('create')">＋ สร้างใบสำคัญ</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ===== DASHBOARD ===== -->
+    <div class="page active" id="page-dashboard">
+      <div id="config-alert" class="config-banner" style="display:none">
+        <span class="icon">⚠️</span>
+        <div style="flex:1">
+          <h3>ยังไม่ได้ตั้งค่า Google Apps Script URL</h3>
+          <p>กรุณาไปที่เมนู <strong>ตั้งค่าระบบ</strong> และกรอก URL ของ Google Apps Script Web App เพื่อเชื่อมต่อกับ Google Sheets</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">รายการใบสำคัญ</span>
+          <button class="btn btn-outline btn-sm" onclick="loadVouchers()">↻ รีเฟรช</button>
+        </div>
+        <div class="filter-bar">
+          <label>ปี</label>
+          <select id="filter-year" onchange="applyFilters()">
+            <option value="">ทั้งหมด</option>
+          </select>
+          <label>เดือน</label>
+          <select id="filter-month" onchange="applyFilters()">
+            <option value="">ทั้งหมด</option>
+            <option value="1">มกราคม</option><option value="2">กุมภาพันธ์</option>
+            <option value="3">มีนาคม</option><option value="4">เมษายน</option>
+            <option value="5">พฤษภาคม</option><option value="6">มิถุนายน</option>
+            <option value="7">กรกฎาคม</option><option value="8">สิงหาคม</option>
+            <option value="9">กันยายน</option><option value="10">ตุลาคม</option>
+            <option value="11">พฤศจิกายน</option><option value="12">ธันวาคม</option>
+          </select>
+          <label>ค้นหา</label>
+          <input type="text" id="search-input" placeholder="เลขที่ / รับจาก ..." oninput="applyFilters()">
+          <button class="btn btn-outline btn-sm" onclick="clearFilters()">✕ ล้าง</button>
+          <span class="filter-count" id="filter-count"></span>
+        </div>
+        <div id="voucher-list-wrap">
+          <div class="empty-state">
+            <div class="icon">📄</div>
+            <p>กำลังโหลดข้อมูล...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== CREATE ===== -->
+    <div class="page" id="page-create">
+      <div class="card" style="padding:28px">
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">วันที่รับเงิน *</label>
+            <input type="date" class="form-input" id="f-date" required onchange="generateRef()">
+          </div>
+          <div class="form-group">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <label class="form-label" style="margin:0">เลขที่ใบสำคัญ (Ref)</label>
+              <div style="display:flex;gap:4px">
+                <button type="button" id="ref-fmt-normal" class="btn btn-primary btn-sm" onclick="setRefFormat('normal')" title="รูปแบบ 001/12/26">📄 ปกติ</button>
+                <button type="button" id="ref-fmt-tr" class="btn btn-outline btn-sm" onclick="setRefFormat('tr')" title="รูปแบบ 12/2026">🔄 TR</button>
+              </div>
+            </div>
+            <input type="text" class="form-input" id="f-ref" placeholder="สร้างอัตโนมัติ...">
+            <!-- <span style="font-size:11px;color:var(--text-light);margin-top:3px" id="ref-hint">ปกติ: 001/เดือน/ปี — แก้ไขได้</span> -->
+          </div>
+          <div class="form-group">
+            <label class="form-label">รับจาก <span style="font-weight:400;color:var(--text-light)">(ธนาคารลูกค้า)</span> *</label>
+            <select class="form-input" id="f-from-select">
+              <option value="">— เลือกบัญชีลูกค้า —</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">บัญชีธนาคาร <span style="font-weight:400;color:var(--text-light)">(ของเรา)</span> *</label>
+            <select class="form-input" id="f-account">
+              <option value="">— เลือกบัญชี —</option>
+            </select>
+          </div>
+          <div class="form-group full">
+            <label class="form-label">หมายเหตุ</label>
+            <input type="text" class="form-input" id="f-note" placeholder="หมายเหตุเพิ่มเติม (ถ้ามี)">
+          </div>
+        </div>
+
+        <!-- ITEMS -->
+        <div class="items-section">
+          <div class="items-header">
+            <h3>รายการ</h3>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-outline btn-sm" onclick="addTRDateRow()" style="color:var(--gold);border-color:var(--gold)">＋ TR</button>
+              <button class="btn btn-outline btn-sm" onclick="addItem()">＋ เพิ่มรายการ</button>
+            </div>
+          </div>
+          <div class="items-table-wrap">
+            <table class="items-table">
+              <thead id="items-thead">
+                <tr>
+                  <th style="width:32px"></th>
+                  <th style="width:40px">#</th>
+                  <th>รายการ / คำอธิบาย</th>
+                  <th style="width:180px">จำนวนเงิน (บาท)</th>
+                  <th style="width:40px"></th>
+                </tr>
+              </thead>
+              <tbody id="items-tbody"></tbody>
+              <tfoot>
+                <tr class="total-row">
+                  <td colspan="3" style="text-align:right">รวมทั้งสิ้น</td>
+                  <td style="text-align:right" id="total-display">0.00</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn btn-outline" onclick="showPage('dashboard')">ยกเลิก</button>
+          <button class="btn btn-primary" onclick="saveVoucher()" id="save-btn">💾 บันทึกใบสำคัญ</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== ACCOUNTS ===== -->
+    <div class="page" id="page-accounts">
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-header"><span class="card-title">เพิ่มบัญชีธนาคาร</span></div>
+        <div style="padding:20px;display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end">
+          <div class="form-group">
+            <label class="form-label">ธนาคาร</label>
+            <input type="text" class="form-input" id="acc-bank" placeholder="BBL, SCB, ...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">เลขที่บัญชี</label>
+            <input type="text" class="form-input" id="acc-number" placeholder="101-1-01010-1" maxlength="13" oninput="formatAccNumber(this)">
+          </div>
+          <button class="btn btn-primary" onclick="saveAccount()" style="height:42px">＋ เพิ่ม</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">บัญชีธนาคารทั้งหมด</span>
+          <button class="btn btn-outline btn-sm" onclick="loadAccounts()">↻ รีเฟรช</button>
+        </div>
+        <div id="accounts-list-wrap">
+          <div class="empty-state"><div class="icon">🏦</div><p>กำลังโหลด...</p></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== OPTIONS ===== -->
+    <div class="page" id="page-options">
+      <!-- Customer Accounts -->
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-header"><span class="card-title">เพิ่มบัญชีธนาคารลูกค้า (รับจาก)</span></div>
+        <div style="padding:20px;display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end">
+          <div class="form-group">
+            <label class="form-label">ธนาคาร</label>
+            <input type="text" class="form-input" id="cust-bank" placeholder="KBANK, BBL, SCB, ...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">เลขที่บัญชี</label>
+            <input type="text" class="form-input" id="cust-number" placeholder="099-2-98523-2" maxlength="13" oninput="formatAccNumber(this)">
+          </div>
+          <button class="btn btn-primary" onclick="saveCustomerAccount()" style="height:42px">＋ เพิ่ม</button>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-header">
+          <span class="card-title">บัญชีธนาคารลูกค้าทั้งหมด</span>
+          <button class="btn btn-outline btn-sm" onclick="loadCustomerAccounts()">↻ รีเฟรช</button>
+        </div>
+        <div id="customer-accounts-list-wrap">
+          <div class="empty-state"><div class="icon">👤</div><p>กำลังโหลด...</p></div>
+        </div>
+      </div>
+      <!-- Description Options -->
+      <div class="card">
+        <div class="card-header"><span class="card-title">จัดการ "รายการ / คำอธิบาย"</span></div>
+        <div style="padding:16px 24px">
+          <div id="opt-description-list" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px"></div>
+          <div style="display:flex;gap:8px">
+            <input type="text" class="form-input" id="opt-desc-new" placeholder="เพิ่มรายการใหม่..." style="max-width:280px">
+            <button class="btn btn-primary" onclick="addOption('description','opt-desc-new')">＋ เพิ่ม</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== SETTINGS ===== -->
+    <div class="page" id="page-settings">
+      <div class="card" style="padding:28px;max-width:600px">
+        <h2 style="font-size:17px;font-weight:700;color:var(--navy);margin-bottom:20px">ตั้งค่า Google Apps Script</h2>
+
+        <div class="form-group" style="margin-bottom:20px">
+          <label class="form-label">Google Apps Script Web App URL</label>
+          <input type="url" class="form-input" id="script-url-input" placeholder="https://script.google.com/macros/s/...">
+          <p style="font-size:12px;color:var(--text-light);margin-top:6px">
+            วาง URL ที่ได้จากการ Deploy Google Apps Script เป็น Web App
+          </p>
+        </div>
+
+        <div class="form-group" style="margin-bottom:20px">
+          <label class="form-label">ชื่อบริษัท (ภาษาไทย)</label>
+          <input type="text" class="form-input" id="company-th-input" value="บริษัท สามารถคอร์ปอเรชั่น จำกัด (มหาชน)">
+        </div>
+        <div class="form-group" style="margin-bottom:24px">
+          <label class="form-label">ชื่อบริษัท (ภาษาอังกฤษ)</label>
+          <input type="text" class="form-input" id="company-en-input" value="SAMART CORPORATION PUBLIC COMPANY LIMITED">
+        </div>
+
+        <button class="btn btn-primary" onclick="saveSettings()">💾 บันทึกการตั้งค่า</button>
+
+        <div class="divider"></div>
+
+        <h2 style="font-size:17px;font-weight:700;color:var(--navy);margin-bottom:16px">วิธีตั้งค่า Google Apps Script</h2>
+        <div style="background:var(--cream);border-radius:10px;padding:20px;font-size:13px;line-height:2;color:var(--text-mid)">
+          <strong style="color:var(--navy)">ขั้นตอน:</strong><br>
+          1. ไปที่ <a href="https://script.google.com" target="_blank" style="color:var(--navy);font-weight:600">script.google.com</a> และสร้างโปรเจกต์ใหม่<br>
+          2. คัดลอก code จากไฟล์ <code style="background:#ddd;padding:1px 5px;border-radius:3px">google-apps-script.js</code> ที่ได้รับมาวางใน editor<br>
+          3. กด <strong>Deploy → New deployment → Web App</strong><br>
+          4. ตั้ง Execute as: <strong>Me</strong> | Who has access: <strong>Anyone</strong><br>
+          5. คัดลอก URL มาวางในช่องด้านบน<br>
+          6. ระบบจะสร้าง Google Sheet และ Sheet ย่อยให้อัตโนมัติ
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+</div>
+
+<!-- PRINT MODAL -->
+<div class="modal-overlay" id="print-modal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closePrintModal()">✕</button>
+    <div id="print-area">
+      <!-- content injected here -->
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closePrintModal()">ปิด</button>
+      <button class="btn btn-primary" onclick="printVoucher()">🖨️ พิมพ์</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast">
+  <span id="toast-msg"></span>
+</div>
+
+<script>
+// ======== STATE ========
+let SCRIPT_URL = localStorage.getItem('scriptUrl') || '';
+let COMPANY_TH = localStorage.getItem('companyTh') || 'บริษัท สามารถคอร์ปอเรชั่น จำกัด (มหาชน)';
+let COMPANY_EN = localStorage.getItem('companyEn') || 'SAMART CORPORATION PUBLIC COMPANY LIMITED';
+let allVouchers = [];
+let allAccounts = [];
+let allCustomerAccounts = [];
+let itemCount = 0;
+let refFormat = 'normal'; // 'normal' | 'tr'
+
+// Combo options — description only (receivedFrom now uses CustomerAccounts sheet)
+let comboOptions = {
+  description: JSON.parse(localStorage.getItem('combo_description') || '["รับคืนภาษีหัก ณ ที่จ่าย","ค่าธรรมเนียม","Service Fee","เงินรับล่วงหน้า"]')
+};
+
+function saveComboOptions(key) {
+  localStorage.setItem('combo_' + key, JSON.stringify(comboOptions[key]));
+  if (SCRIPT_URL) syncOptionsToSheet();
 }
 
-// ---- GENERATE ID ----
-function generateVoucherId() {
-  const ss = getSpreadsheet();
-  const sheet = ss.getSheetByName(SHEET_NAME_VOUCHERS);
-  const lastRow = sheet.getLastRow();
-  const year = new Date().getFullYear().toString().slice(-2);
-  const month = String(new Date().getMonth() + 1).padStart(2, '0');
-  const seq = String(lastRow).padStart(4, '0'); // rows = last seq
-  return `V${year}${month}-${seq}`;
-}
-
-// ---- HTTP HANDLER ----
-function doGet(e) {
-  return handleRequest(e);
-}
-
-function doPost(e) {
-  return handleRequest(e);
-}
-
-function handleRequest(e) {
-  // Run setup on first use
-  try { setup(); } catch(err) {}
-
-  // Support both GET param and POST body
-  const action = e.parameter.action || '';
-
-  // Data comes as URL param (for GitHub Pages CORS compatibility)
-  let body = {};
+async function loadOptionsFromSheet() {
+  if (!SCRIPT_URL) return;
   try {
-    if (e.parameter.data) {
-      body = JSON.parse(e.parameter.data);
-    } else if (e.postData && e.postData.contents) {
-      body = JSON.parse(e.postData.contents);
-    }
-  } catch(err) {}
-
-  let result;
-  try {
-    switch (action) {
-      case 'getVouchers':   result = getVouchers(); break;
-      case 'getVoucher':    result = getVoucher(e.parameter.id); break;
-      case 'createVoucher': result = createVoucher(body); break;
-      case 'deleteVoucher': result = deleteVoucher(body); break;
-      case 'getOptions':    result = getOptions(); break;
-      case 'saveOptions':   result = saveOptions(body); break;
-      case 'getCustomerAccounts':    result = getCustomerAccounts(); break;
-      case 'createCustomerAccount':  result = createCustomerAccount(body); break;
-      case 'updateCustomerAccount':  result = updateCustomerAccount(body); break;
-      case 'deleteCustomerAccount':  result = deleteCustomerAccount(body); break;
-      case 'getAccounts':   result = getAccounts(); break;
-      case 'createAccount': result = createAccount(body); break;
-      case 'updateAccount': result = updateAccount(body); break;
-      case 'deleteAccount': result = deleteAccount(body); break;
-      default: result = { success: false, message: 'Unknown action: ' + action };
-    }
-  } catch(err) {
-    result = { success: false, message: err.toString() };
-  }
-
-  // Return with CORS headers (allows GitHub Pages origin)
-  return ContentService
-    .createTextOutput(JSON.stringify(result))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-// ---- VOUCHERS ----
-function getVouchers() {
-  const ss = getSpreadsheet();
-  const vSheet = ss.getSheetByName(SHEET_NAME_VOUCHERS);
-  const iSheet = ss.getSheetByName(SHEET_NAME_ITEMS);
-
-  if (!vSheet) return { success: true, data: [] };
-
-  const lastRow = vSheet.getLastRow();
-  if (lastRow < 2) return { success: true, data: [] };
-
-  const vData = vSheet.getRange(2, 1, lastRow - 1, 9).getValues();
-  // ✅ getDisplayValues สำหรับ ref column — ได้ text จริงจาก CONCATENATE formula
-  const vRefDisplay = vSheet.getRange(2, 3, lastRow - 1, 1).getDisplayValues();
-  const iLastRow = iSheet.getLastRow();
-  let iData = [];
-  if (iLastRow >= 2) {
-    iData = iSheet.getRange(2, 1, iLastRow - 1, 4).getValues();
-  }
-
-  const vouchers = vData.map((row, idx) => {
-    const vid = row[0];
-    const items = iData
-      .filter(ir => ir[0] === vid)
-      .map(ir => ({ itemNo: ir[1], description: ir[2], amount: ir[3] }));
-    // ใช้ display value ของ ref แทน raw value เพื่อรองรับ CONCATENATE formula
-    const refDisplay = vRefDisplay[idx] ? vRefDisplay[idx][0] : '';
-    return {
-      voucherId: vid,
-      date: row[1] instanceof Date ? Utilities.formatDate(row[1], 'Asia/Bangkok', 'yyyy-MM-dd') : String(row[1] || ''),
-      voucherRef: String(refDisplay || ''),
-      receivedFrom: row[3],
-      accountCode: row[4],
-      accountLabel: row[5],
-      note: row[6],
-      total: row[7],
-      createdAt: row[8],
-      items: items
-    };
-  });
-
-  return { success: true, data: vouchers };
-}
-
-function getVoucher(id) {
-  const all = getVouchers();
-  const v = (all.data || []).find(x => x.voucherId === id);
-  if (!v) return { success: false, message: 'Not found' };
-  return { success: true, data: v };
-}
-
-function createVoucher(data) {
-  const ss = getSpreadsheet();
-  const vSheet = ss.getSheetByName(SHEET_NAME_VOUCHERS);
-  const iSheet = ss.getSheetByName(SHEET_NAME_ITEMS);
-
-  // Check duplicate voucherRef (ใช้ getDisplayValues เพื่อรับค่าจาก formula ด้วย)
-  if (data.ref) {
-    const lastRow = vSheet.getLastRow();
-    if (lastRow >= 2) {
-      const refs = vSheet.getRange(2, 3, lastRow - 1, 1).getDisplayValues().flat();
-      const refNorm = data.ref.toString().trim().toLowerCase();
-      const dup = refs.find(r => r && r.toString().trim().toLowerCase() === refNorm);
-      if (dup) return { success: false, message: 'เลขที่ "' + data.ref + '" ซ้ำกับรายการที่มีอยู่แล้ว' };
-    }
-  }
-
-  const vid = generateVoucherId();
-  const now = new Date();
-
-  // ✅ DEFINITIVE FIX: write ref ด้วย CONCATENATE formula
-  // appendRow + setNumberFormat ไม่ทัน Sheets แปลงก่อน
-  // CONCATENATE("001/04/26") = formula ที่ return string — Sheets ไม่แปลงเป็น Date
-  const nextRow = vSheet.getLastRow() + 1;
-
-  // Force format ทั้ง row เป็น plain text ก่อน
-  vSheet.getRange(nextRow, 1, 1, 9).setNumberFormat('@STRING@');
-
-  // เขียนทีละ cell เพื่อควบคุม ref ได้
-  vSheet.getRange(nextRow, 1).setValue(vid);
-  vSheet.getRange(nextRow, 2).setValue(data.date);
-  // ref: ใช้ CONCATENATE trick ป้องกัน date auto-conversion
-  const refSafe = String(data.ref || '').replace(/"/g, '""');
-  vSheet.getRange(nextRow, 3).setFormula('=CONCATENATE("' + refSafe + '")');
-  vSheet.getRange(nextRow, 4).setValue(String(data.receivedFrom || ''));
-  vSheet.getRange(nextRow, 5).setValue(String(data.accountCode || ''));
-  vSheet.getRange(nextRow, 6).setValue(String(data.accountLabel || ''));
-  vSheet.getRange(nextRow, 7).setValue(String(data.note || ''));
-  vSheet.getRange(nextRow, 8).setValue(Number(data.total) || 0);
-  vSheet.getRange(nextRow, 9).setValue(Utilities.formatDate(now, 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss'));
-  // re-apply @STRING@ after write ไม่ให้ formula column กลับเป็น General
-  vSheet.getRange(nextRow, 3).setNumberFormat('@STRING@');
-
-  // Append each item to VoucherItems
-  const items = data.items || [];
-  items.forEach((item, idx) => {
-    iSheet.appendRow([
-      vid,
-      idx + 1,
-      item.description || '',
-      item.amount || 0
-    ]);
-  });
-
-  // Auto-format last row in Vouchers
-  const lastRow = vSheet.getLastRow();
-  if (lastRow % 2 === 0) {
-    vSheet.getRange(lastRow, 1, 1, 9).setBackground('#f8f5ef');
-  }
-
-  return { success: true, voucherId: vid };
-}
-
-// ---- OPTIONS ----
-function getOptions() {
-  const ss = getSpreadsheet();
-  const sheet = ss.getSheetByName(SHEET_NAME_OPTIONS);
-  if (!sheet) return { success: true, data: {} };
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { success: true, data: {} };
-  const rows = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
-  const data = {};
-  rows.forEach(row => {
-    if (row[0]) data[row[0]] = row[1] ? row[1].toString().split(',').map(s => s.trim()).filter(Boolean) : [];
-  });
-  return { success: true, data };
-}
-
-function saveOptions(data) {
-  const ss = getSpreadsheet();
-  const sheet = ss.getSheetByName(SHEET_NAME_OPTIONS);
-  if (!sheet) return { success: false, message: 'Options sheet not found' };
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { success: false, message: 'No rows' };
-  const rows = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
-  const keys = ['receivedFrom', 'description'];
-  keys.forEach(key => {
-    if (!data[key]) return;
-    const val = data[key].join(',');
-    const rowIdx = rows.findIndex(r => r[0] === key);
-    if (rowIdx >= 0) {
-      sheet.getRange(rowIdx + 2, 2).setValue(val);
-    } else {
-      sheet.appendRow([key, val]);
-    }
-  });
-  return { success: true };
-}
-
-// ---- CUSTOMER ACCOUNTS ----
-function getCustomerAccounts() {
-  const ss = getSpreadsheet();
-  const sheet = ss.getSheetByName(SHEET_NAME_CUSTOMER_ACCOUNTS);
-  if (!sheet) return { success: true, data: [] };
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { success: true, data: [] };
-  const data = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
-  return {
-    success: true,
-    data: data.map(r => ({ code: r[0], bank: r[1], number: r[2] })).filter(a => a.code)
-  };
-}
-
-function createCustomerAccount(data) {
-  const ss = getSpreadsheet();
-  const sheet = ss.getSheetByName(SHEET_NAME_CUSTOMER_ACCOUNTS);
-  const existing = getCustomerAccounts();
-  if ((existing.data || []).find(a => a.code === data.code)) {
-    return { success: false, message: `บัญชีนี้มีอยู่แล้ว` };
-  }
-  sheet.appendRow([data.code, data.bank, data.number]);
-  return { success: true };
-}
-
-function updateCustomerAccount(data) {
-  const ss = getSpreadsheet();
-  const sheet = ss.getSheetByName(SHEET_NAME_CUSTOMER_ACCOUNTS);
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { success: false, message: 'ไม่พบข้อมูล' };
-  const rows = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
-  for (let i = 0; i < rows.length; i++) {
-    if (String(rows[i][0]) === String(data.code)) {
-      sheet.getRange(i + 2, 2, 1, 2).setValues([[data.bank, data.number]]);
-      return { success: true };
-    }
-  }
-  return { success: false, message: 'ไม่พบรหัส ' + data.code };
-}
-
-function deleteCustomerAccount(data) {
-  const ss = getSpreadsheet();
-  const sheet = ss.getSheetByName(SHEET_NAME_CUSTOMER_ACCOUNTS);
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { success: false, message: 'ไม่พบข้อมูล' };
-  const rows = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
-  for (let i = 0; i < rows.length; i++) {
-    if (String(rows[i][0]) === String(data.code)) {
-      sheet.deleteRow(i + 2);
-      return { success: true };
-    }
-  }
-  return { success: false, message: 'ไม่พบรหัส ' + data.code };
-}
-
-// ---- ACCOUNTS ----
-function getAccounts() {
-  const ss = getSpreadsheet();
-  const sheet = ss.getSheetByName(SHEET_NAME_ACCOUNTS);
-  if (!sheet) return { success: true, data: [] };
-
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { success: true, data: [] };
-
-  const data = sheet.getRange(2, 1, lastRow - 1, 4).getValues();
-  const accounts = data.map(row => ({
-    code: row[0],
-    bank: row[1],
-    number: row[2],
-    type: row[3]
-  })).filter(a => a.code);
-
-  return { success: true, data: accounts };
-}
-
-function createAccount(data) {
-  const ss = getSpreadsheet();
-  const sheet = ss.getSheetByName(SHEET_NAME_ACCOUNTS);
-  const existing = getAccounts();
-  if ((existing.data || []).find(a => a.code === data.code)) {
-    return { success: false, message: `รหัส ${data.code} มีอยู่แล้ว` };
-  }
-  sheet.appendRow([data.code, data.bank, data.number, '']);
-  return { success: true };
-}
-
-function updateAccount(data) {
-  const ss = getSpreadsheet();
-  const sheet = ss.getSheetByName(SHEET_NAME_ACCOUNTS);
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { success: false, message: 'ไม่พบข้อมูล' };
-  const rows = sheet.getRange(2, 1, lastRow - 1, 4).getValues();
-  for (let i = 0; i < rows.length; i++) {
-    if (String(rows[i][0]) === String(data.code)) {
-      sheet.getRange(i + 2, 2, 1, 2).setValues([[data.bank, data.number]]);
-      return { success: true };
-    }
-  }
-  return { success: false, message: 'ไม่พบรหัส ' + data.code };
-}
-
-function deleteAccount(data) {
-  const ss = getSpreadsheet();
-  const sheet = ss.getSheetByName(SHEET_NAME_ACCOUNTS);
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { success: false, message: 'ไม่พบข้อมูล' };
-  const rows = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
-  for (let i = 0; i < rows.length; i++) {
-    if (String(rows[i][0]) === String(data.code)) {
-      sheet.deleteRow(i + 2);
-      return { success: true };
-    }
-  }
-  return { success: false, message: 'ไม่พบรหัส ' + data.code };
-}
-
-function deleteVoucher(data) {
-  const ss = getSpreadsheet();
-  const vSheet = ss.getSheetByName(SHEET_NAME_VOUCHERS);
-  const iSheet = ss.getSheetByName(SHEET_NAME_ITEMS);
-  const lastRow = vSheet.getLastRow();
-  if (lastRow < 2) return { success: false, message: 'ไม่พบข้อมูล' };
-  const rows = vSheet.getRange(2, 1, lastRow - 1, 1).getValues();
-  for (let i = 0; i < rows.length; i++) {
-    if (String(rows[i][0]) === String(data.voucherId)) {
-      vSheet.deleteRow(i + 2);
-      // delete related items
-      const iLastRow = iSheet.getLastRow();
-      if (iLastRow >= 2) {
-        const iRows = iSheet.getRange(2, 1, iLastRow - 1, 1).getValues();
-        for (let j = iRows.length - 1; j >= 0; j--) {
-          if (String(iRows[j][0]) === String(data.voucherId)) iSheet.deleteRow(j + 2);
-        }
+    const res = await apiGet('getOptions');
+    if (res.success && res.data) {
+      if (res.data.description && res.data.description.length) {
+        comboOptions.description = res.data.description;
+        localStorage.setItem('combo_description', JSON.stringify(comboOptions.description));
       }
-      return { success: true };
+      renderOptionsPage();
+    }
+  } catch(e) { console.log('loadOptions error', e); }
+}
+
+async function syncOptionsToSheet() {
+  if (!SCRIPT_URL) return;
+  try {
+    await api('saveOptions', { description: comboOptions.description });
+  } catch(e) { console.log('syncOptions error', e); }
+}
+
+// ======== INIT ========
+window.onload = () => {
+  document.getElementById('script-url-input').value = SCRIPT_URL;
+  document.getElementById('company-th-input').value = COMPANY_TH;
+  document.getElementById('company-en-input').value = COMPANY_EN;
+  updateSidebarCompany();
+  checkConfig();
+  setDefaultDate();
+  addItem(); addItem();
+  loadVouchers();
+  loadAccounts();
+  loadCustomerAccounts();
+  loadOptionsFromSheet();
+};
+
+function checkConfig() {
+  const alert = document.getElementById('config-alert');
+  if (!SCRIPT_URL) {
+    alert.style.display = 'flex';
+  } else {
+    alert.style.display = 'none';
+  }
+}
+
+function updateSidebarCompany() {
+  document.querySelector('.company-th').textContent = COMPANY_TH;
+}
+
+function setDefaultDate() {
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('f-date').value = today;
+  setRefFormat(refFormat);
+}
+
+// ======== NAVIGATION ========
+const pages = {
+  dashboard: { title: 'รายการใบสำคัญทั้งหมด', sub: 'ค้นหาและจัดการใบสำคัญรับเงิน' },
+  create: { title: 'สร้างใบสำคัญใหม่', sub: 'กรอกข้อมูลเพื่อบันทึกใบสำคัญรับเงิน' },
+  accounts: { title: 'จัดการบัญชีธนาคาร', sub: 'เพิ่ม/แก้ไข/ลบบัญชีธนาคาร' },
+  options: { title: 'บัญชีธนาคารลูกค้า', sub: 'จัดการบัญชีธนาคารลูกค้า (รับจาก) และรายการ/คำอธิบาย' },
+  settings: { title: 'ตั้งค่าระบบ', sub: 'ตั้งค่าการเชื่อมต่อ Google Sheets' }
+};
+
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  event && event.currentTarget && event.currentTarget.classList && event.currentTarget.classList.add('active');
+  // manual active
+  document.querySelectorAll('.nav-item').forEach(n => {
+    if (n.getAttribute('onclick') && n.getAttribute('onclick').includes(name)) n.classList.add('active');
+  });
+  document.getElementById('topbar-title').textContent = pages[name].title;
+  document.getElementById('topbar-sub').textContent = pages[name].sub;
+  if (name === 'dashboard') loadVouchers();
+  if (name === 'accounts') loadAccounts();
+  if (name === 'options') { loadCustomerAccounts(); renderOptionsPage(); }
+}
+
+// ======== API (all GET to avoid CORS preflight from GitHub Pages) ========
+async function api(action, data = {}) {
+  if (!SCRIPT_URL) throw new Error('ยังไม่ได้ตั้งค่า Script URL');
+  const url = SCRIPT_URL
+    + '?action=' + encodeURIComponent(action)
+    + '&data=' + encodeURIComponent(JSON.stringify(data));
+  const res = await fetch(url);
+  return res.json();
+}
+
+async function apiGet(action, params = {}) {
+  if (!SCRIPT_URL) throw new Error('ยังไม่ได้ตั้งค่า Script URL');
+  let url = SCRIPT_URL + '?action=' + encodeURIComponent(action);
+  Object.keys(params).forEach(k => url += '&' + k + '=' + encodeURIComponent(params[k]));
+  const res = await fetch(url);
+  return res.json();
+}
+
+// ======== VOUCHERS ========
+async function loadVouchers() {
+  const wrap = document.getElementById('voucher-list-wrap');
+  wrap.innerHTML = '<div class="empty-state"><div class="icon">⏳</div><p>กำลังโหลด...</p></div>';
+
+  if (!SCRIPT_URL) {
+    wrap.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div><p>กรุณาตั้งค่า Script URL ก่อน</p></div>';
+    return;
+  }
+
+  try {
+    const res = await apiGet('getVouchers');
+    if (res.success) {
+      allVouchers = res.data || [];
+      populateYearFilter(allVouchers);
+      applyFilters();
+      updateStats(allVouchers);
+      setSyncStatus('อัปเดตเมื่อ ' + new Date().toLocaleTimeString('th-TH'));
+    } else throw new Error(res.message);
+  } catch (e) {
+    wrap.innerHTML = `<div class="empty-state"><div class="icon">❌</div><p>${e.message}</p></div>`;
+  }
+}
+
+function renderVoucherTable(data) {
+  const wrap = document.getElementById('voucher-list-wrap');
+  if (!data.length) {
+    wrap.innerHTML = '<div class="empty-state"><div class="icon">📄</div><p>ยังไม่มีรายการ</p></div>';
+    return;
+  }
+  const rows = data.map(v => `
+    <tr>
+      <td><span class="tag-code">${formatRef(v.voucherRef || v.voucherId)}</span></td>
+      <td>${formatDateTH(v.date)}</td>
+      <td>${v.receivedFrom}</td>
+      <td>${v.accountLabel || ''}</td>
+      <td class="amount">${formatNumber(v.total)}</td>
+      <td><span class="badge draft">บันทึกแล้ว</span></td>
+      <td>
+        <div class="action-btns">
+          <button class="btn btn-outline btn-sm" onclick='previewVoucher(${JSON.stringify(v)})'>👁 ดู / พิมพ์</button>
+          <button class="btn btn-danger btn-sm" onclick='deleteVoucher("${v.voucherId}")'>🗑</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+  wrap.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>เลขที่</th><th>วันที่</th><th>รับจาก</th><th>บัญชี</th><th style="text-align:right">จำนวนเงิน</th><th>สถานะ</th><th>จัดการ</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function updateStats(data) {
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set('stat-total', data.length);
+  const now = new Date();
+  const thisMonth = data.filter(v => { const d = new Date(v.date); return d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear(); });
+  const monthTotal = thisMonth.reduce((s,v) => s + parseFloat(v.total||0), 0);
+  set('stat-month', formatNumber(monthTotal));
+  if (data.length > 0) {
+    const last = data[data.length-1];
+    set('stat-latest', formatNumber(last.total));
+    set('stat-latest-date', formatDateTH(last.date));
+  }
+}
+
+function applyFilters() {
+  const year  = document.getElementById('filter-year').value;
+  const month = document.getElementById('filter-month').value;
+  const q     = (document.getElementById('search-input').value || '').toLowerCase();
+
+  const filtered = allVouchers.filter(v => {
+    const d = v.date ? new Date(v.date) : null;
+    if (year  && d && String(d.getFullYear()) !== year)  return false;
+    if (month && d && String(d.getMonth() + 1) !== month) return false;
+    if (q && !(v.voucherId + (v.voucherRef||'') + v.receivedFrom + (v.accountLabel||'')).toLowerCase().includes(q)) return false;
+    return true;
+  });
+  renderVoucherTable(filtered);
+  document.getElementById('filter-count').textContent = `แสดง ${filtered.length} / ${allVouchers.length} รายการ`;
+}
+
+function clearFilters() {
+  document.getElementById('filter-year').value = '';
+  document.getElementById('filter-month').value = '';
+  document.getElementById('search-input').value = '';
+  applyFilters();
+}
+
+function populateYearFilter(data) {
+  const years = [...new Set(data.map(v => v.date ? new Date(v.date).getFullYear() : null).filter(Boolean))].sort((a,b)=>b-a);
+  const sel = document.getElementById('filter-year');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">ทั้งหมด</option>';
+  years.forEach(y => {
+    const o = document.createElement('option');
+    o.value = y; o.textContent = y + 543; // พ.ศ.
+    if (String(y) === cur) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+
+// ======== SEARCHABLE DROPDOWN ========
+let sdropState = {};
+
+function renderSdropOptions(uid, key, filter='') {
+  const wrap = document.getElementById('sdrop-' + uid + '-options');
+  if (!wrap) return;
+  const opts = (comboOptions[key] || []).filter(o => o.toLowerCase().includes(filter.toLowerCase()));
+  if (!opts.length) {
+    wrap.innerHTML = '<div class="sdrop-option no-result">ไม่พบรายการ</div>';
+    return;
+  }
+  const cur = sdropState[uid] && sdropState[uid].value;
+  wrap.innerHTML = opts.map(o => `
+    <div class="sdrop-option ${o===cur?'selected':''}" onclick="selectSdrop('${uid}','${key}','${o.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">
+      ${o}
+    </div>`).join('');
+}
+
+function toggleSdrop(uid) {
+  const list = document.getElementById('sdrop-' + uid + '-list');
+  if (!list) return;
+  const isOpen = list.classList.contains('open');
+  document.querySelectorAll('.sdrop-list.open').forEach(l => {
+    l.classList.remove('open');
+    l.style.top = '';
+    l.style.bottom = '';
+  });
+  if (!isOpen) {
+    // Check if enough space below
+    const trigger = document.getElementById('sdrop-' + uid + '-display');
+    const wrap = trigger ? trigger.closest('.sdrop-wrap') : null;
+    if (wrap) {
+      const rect = wrap.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const listHeight = 260; // max-height of list
+      if (spaceBelow < listHeight && rect.top > listHeight) {
+        // Open upward
+        list.style.top = 'auto';
+        list.style.bottom = 'calc(100% + 4px)';
+      } else {
+        list.style.top = 'calc(100% + 4px)';
+        list.style.bottom = 'auto';
+      }
+    }
+    list.classList.add('open');
+    const search = document.getElementById('sdrop-' + uid + '-search');
+    if (search) { search.value = ''; setTimeout(() => search.focus(), 50); }
+    const key = uid === 'from' ? 'receivedFrom' : 'description';
+    renderSdropOptions(uid, key);
+  }
+}
+
+function filterSdrop(uid) {
+  const search = document.getElementById('sdrop-' + uid + '-search');
+  const key = uid === 'from' ? 'receivedFrom' : 'description';
+  if (search) renderSdropOptions(uid, key, search.value);
+}
+
+function selectSdrop(uid, key, val) {
+  sdropState[uid] = { key, value: val };
+  const btn = document.getElementById('sdrop-' + uid + '-display');
+  if (btn) { btn.textContent = val; btn.classList.remove('placeholder'); }
+  if (uid === 'from') {
+    const h = document.getElementById('f-from'); if (h) h.value = val;
+  } else {
+    const wrapEl = document.getElementById('sdrop-' + uid + '-wrap');
+    if (wrapEl) {
+      const tr = wrapEl.closest('tr');
+      if (tr) { const h = tr.querySelector('.item-desc-val'); if (h) h.value = val; }
     }
   }
-  return { success: false, message: 'ไม่พบใบสำคัญ' };
+  const list = document.getElementById('sdrop-' + uid + '-list');
+  if (list) list.classList.remove('open');
 }
 
+function addFromSdrop() {} // no longer used - รับจาก now uses CustomerAccounts
 
-function testSetup() {
-  Logger.log(JSON.stringify(setup()));
+function addItemSdrop(uid) {
+  document.querySelectorAll('.sdrop-list.open').forEach(l => l.classList.remove('open'));
+  const val = prompt('พิมพ์รายการใหม่:');
+  if (!val || !val.trim()) return;
+  const v = val.trim();
+  if (!comboOptions.description.includes(v)) { comboOptions.description.push(v); saveComboOptions('description'); }
+  selectSdrop(uid, 'description', v);
+  refreshAllItemSelects();
+  renderOptionsPage();
 }
 
-function testCreateVoucher() {
-  const result = createVoucher({
-    date: '2024-01-15',
-    ref: 'TEST/001',
-    receivedFrom: 'BBL',
-    accountCode: '001',
-    accountLabel: 'BBL s/a 127-3-08250-1',
-    note: 'ทดสอบ',
-    total: 3487.50,
-    items: [
-      { description: 'รับคืนภาษีหัก ณ ที่จ่าย', amount: 3487.50 }
-    ]
+document.addEventListener('click', e => {
+  if (!e.target.closest('.sdrop-wrap')) document.querySelectorAll('.sdrop-list.open').forEach(l => l.classList.remove('open'));
+});
+
+function populateCombo() {}
+function handleComboChange() {}
+function addComboOption() {}
+function populateItemCombo() {}
+function refreshAllItemSelects() {
+  document.querySelectorAll('[id$="-options"]').forEach(el => {
+    const m = el.id.match(/^sdrop-(item\d+)-options$/);
+    if (m) renderSdropOptions(m[1], 'description');
   });
-  Logger.log(JSON.stringify(result));
 }
+function handleItemDescChange() {}
+
+// ======== TR DATE ROW ========
+function addTRDateRow() {
+  itemCount++;
+  const tbody = document.getElementById('items-tbody');
+  const tr = document.createElement('tr');
+  tr.id = 'item-row-' + itemCount;
+  tr.className = 'tr-date-row';
+  tr.dataset.type = 'tr';
+  const ic = itemCount;
+  const today = new Date().toISOString().split('T')[0];
+  tr.innerHTML = `
+    <td><div class="reorder-btns"><button class="reorder-btn" onclick="moveRow(${ic},-1)" title="ขึ้น">▲</button><button class="reorder-btn" onclick="moveRow(${ic},1)" title="ลง">▼</button></div></td>
+    <td style="text-align:center;color:var(--gold);font-size:11px;font-weight:700">TR</td>
+    <td colspan="2">
+      <div class="tr-date-label">วันที่โอน *</div>
+      <input type="date" id="trdate-${ic}" class="tr-date-val" value="${today}" required>
+    </td>
+    <td><button class="del-row" onclick="removeItem(${ic})">✕</button></td>
+  `;
+  tbody.appendChild(tr);
+  renumberItems();
+}
+
+function moveRow(id, direction) {
+  const row = document.getElementById('item-row-' + id);
+  if (!row) return;
+  const tbody = document.getElementById('items-tbody');
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  const idx = rows.indexOf(row);
+  const target = rows[idx + direction];
+  if (!target) return;
+  if (direction === -1) tbody.insertBefore(row, target);
+  else tbody.insertBefore(target, row);
+  renumberItems();
+}
+
+function populateSourceAccountDropdown() {}
+
+// ======== ITEMS (FORM) ========
+// ======== ITEMS (FORM) ========
+function addItem() {
+  itemCount++;
+  const tbody = document.getElementById('items-tbody');
+  const tr = document.createElement('tr');
+  tr.id = 'item-row-' + itemCount;
+  tr.dataset.type = 'normal';
+  const uid = 'item' + itemCount;
+  const ic = itemCount;
+  tr.innerHTML = `
+    <td><div class="reorder-btns"><button class="reorder-btn" onclick="moveRow(${ic},-1)" title="ขึ้น">▲</button><button class="reorder-btn" onclick="moveRow(${ic},1)" title="ลง">▼</button></div></td>
+    <td style="text-align:center;color:var(--text-light);font-size:13px" class="row-num"></td>
+    <td>
+      <div class="sdrop-wrap" id="sdrop-${uid}-wrap" style="position:relative">
+        <button type="button" class="sdrop-trigger item-trigger placeholder" id="sdrop-${uid}-display" onclick="toggleSdrop('${uid}')">— เลือก —</button>
+        <span class="sdrop-arrow" style="font-size:10px">▼</span>
+        <div class="sdrop-list" id="sdrop-${uid}-list">
+          <div class="sdrop-search"><input type="text" id="sdrop-${uid}-search" placeholder="🔍 ค้นหา..." oninput="filterSdrop('${uid}')" onclick="event.stopPropagation()"></div>
+          <div id="sdrop-${uid}-options"></div>
+          <div class="sdrop-option add-new" onclick="addItemSdrop('${uid}')">＋ เพิ่มรายการใหม่...</div>
+        </div>
+      </div>
+      <input type="hidden" id="desc-${ic}" class="item-desc-val">
+    </td>
+    <td><input type="text" inputmode="decimal" class="amount-input" placeholder="0.00" id="amt-${ic}" oninput="formatAmountInput(this)" style="text-align:right"></td>
+    <td><button class="del-row" onclick="removeItem(${ic})">✕</button></td>
+  `;
+  tbody.appendChild(tr);
+  renderSdropOptions(uid, 'description');
+  renumberItems();
+}
+
+function removeItem(id) {
+  const row = document.getElementById('item-row-' + id);
+  if (row) row.remove();
+  calcTotal();
+  renumberItems();
+}
+
+function renumberItems() {
+  let n = 1;
+  document.querySelectorAll('#items-tbody tr').forEach(tr => {
+    const numCell = tr.querySelector('.row-num');
+    if (numCell) { numCell.textContent = n++; }
+  });
+}
+
+async function deleteVoucher(voucherId) {
+  if (!confirm('ยืนยันลบใบสำคัญนี้?')) return;
+  showToast('⏳ กำลังลบ...', 'success');
+  try {
+    const res = await api('deleteVoucher', { voucherId });
+    if (res.success) {
+      showToast('✅ ลบใบสำคัญแล้ว', 'success');
+      loadVouchers();
+    } else throw new Error(res.message);
+  } catch(e) { showToast('❌ ' + e.message, 'error'); }
+}
+
+function formatAmountInput(input) {
+  // Remove non-numeric except dot
+  let raw = input.value.replace(/[^0-9.]/g, '');
+  // Allow only one dot
+  const parts = raw.split('.');
+  if (parts.length > 2) raw = parts[0] + '.' + parts.slice(1).join('');
+  // Store raw numeric value as data attribute
+  input.dataset.raw = raw;
+  // Format with commas
+  if (raw === '' || raw === '.') { input.value = raw; calcTotal(); return; }
+  const num = parseFloat(raw);
+  if (isNaN(num)) { input.value = ''; calcTotal(); return; }
+  // Keep trailing dot or zeros while typing
+  const hasDot = raw.includes('.');
+  const decimals = hasDot ? raw.split('.')[1] : '';
+  const intFormatted = Math.floor(num).toLocaleString('th-TH');
+  input.value = hasDot ? intFormatted + '.' + decimals : intFormatted;
+  calcTotal();
+}
+
+function parseAmountInput(input) {
+  const raw = (input.dataset.raw || input.value).replace(/,/g, '');
+  return parseFloat(raw) || 0;
+}
+
+function calcTotal() {
+  let total = 0;
+  document.querySelectorAll('.amount-input').forEach(inp => {
+    total += parseAmountInput(inp);
+  });
+  document.getElementById('total-display').textContent = formatNumber(total);
+}
+
+function getItems() {
+  const rows = document.querySelectorAll('#items-tbody tr');
+  const items = [];
+  rows.forEach(tr => {
+    if (tr.dataset.type === 'tr') {
+      const dateInp = tr.querySelector('.tr-date-val');
+      const date = dateInp && dateInp.value ? dateInp.value : new Date().toISOString().split('T')[0];
+      items.push({ type: 'tr', date, description: '__TR__' + date, amount: 0 });
+    } else {
+      const descInp = tr.querySelector('.item-desc-val');
+      const amtInp  = tr.querySelector('input.amount-input');
+      if (descInp && amtInp) {
+        const desc = descInp.value || '';
+        const amt  = parseAmountInput(amtInp);
+        if (desc || amt) items.push({ type: 'normal', description: desc, amount: amt });
+      }
+    }
+  });
+  return items;
+}
+
+// ======== SAVE VOUCHER ========
+async function saveVoucher() {
+  const date = document.getElementById('f-date').value;
+  const ref = document.getElementById('f-ref').value.trim();
+  const fromCode = document.getElementById('f-from-select').value;
+  const fromAccount = allCustomerAccounts.find(a => a.code === fromCode);
+  const from = fromAccount ? `${fromAccount.bank} ${fromAccount.number}` : '';
+  const accountCode = document.getElementById('f-account').value;
+  const note = document.getElementById('f-note').value.trim();
+  const items = getItems();
+
+  if (!date) { showToast('กรุณาระบุวันที่', 'error'); return; }
+  if (!fromCode) { showToast('กรุณาเลือกบัญชีลูกค้า (รับจาก)', 'error'); return; }
+  if (!accountCode) { showToast('กรุณาเลือกบัญชีธนาคาร (ของเรา)', 'error'); return; }
+  if (!items.length) { showToast('กรุณาเพิ่มรายการอย่างน้อย 1 รายการ', 'error'); return; }
+  // ตรวจ TR rows ว่ามีวันที่ครบ
+  const trMissing = items.filter(it => it.type === 'tr' && !it.date);
+  if (trMissing.length) { showToast('กรุณาระบุวันที่โอนในทุกแถว TR', 'error'); return; }
+  // ตรวจ normal items มี description/amount
+  const normalItems = items.filter(it => it.type !== 'tr');
+  if (!normalItems.length) { showToast('กรุณาเพิ่มรายการอย่างน้อย 1 รายการ (ไม่นับ TR)', 'error'); return; }
+  const zeroItems = normalItems.filter(it => !it.amount || it.amount === 0);
+  // allow zero amount — some items may legitimately be 0
+  // validate: description ห้ามว่าง
+  const emptyDesc = normalItems.find(it => !it.description || !it.description.trim());
+  if (emptyDesc) { showToast('กรุณาเลือกรายการ / คำอธิบายให้ครบทุกแถว', 'error'); return; }
+  // validate: amount ห้ามว่าง/0
+  const emptyAmt = normalItems.find(it => !it.amount || it.amount <= 0);
+  if (emptyAmt) { showToast('กรุณากรอกจำนวนเงินให้ครบทุกแถว (ต้องมากกว่า 0)', 'error'); return; }
+
+  // ห้ามซ้ำ: normal ห้ามซ้ำทุกกรณี, TR ห้ามซ้ำในเดือนเดียวกัน
+  if (ref) {
+    const refNorm = ref.trim().toLowerCase();
+    const isTRRef = /^\d{2}\/\d{4}$/.test(ref.trim());
+    const duplicate = allVouchers.find(v => {
+      const r = formatRef(v.voucherRef || '').trim().toLowerCase();
+      if (isTRRef) return r === refNorm; // TR: ห้ามซ้ำ ref เดียวกัน (เดือน/ปีเดียวกัน)
+      return r === refNorm;
+    });
+    if (duplicate) {
+      const msg = isTRRef
+        ? '❌ เลขที่ TR "' + ref + '" ซ้ำในเดือนนี้ กรุณาตรวจสอบ'
+        : '❌ เลขที่ "' + ref + '" ซ้ำกับรายการที่มีอยู่แล้ว กรุณาแก้ไข';
+      showToast(msg, 'error');
+      const refEl = document.getElementById('f-ref');
+      refEl.style.borderColor = 'var(--red)';
+      refEl.style.boxShadow = '0 0 0 3px rgba(192,57,43,0.15)';
+      refEl.focus(); refEl.select();
+      setTimeout(() => { refEl.style.borderColor = ''; refEl.style.boxShadow = ''; }, 3000);
+      return;
+    }
+  }
+
+  const account = allAccounts.find(a => a.code === accountCode);
+  const total = items.reduce((s, i) => s + i.amount, 0);
+
+  const payload = {
+    date, ref, receivedFrom: from, accountCode,
+    accountLabel: account ? `${account.bank} ${account.number}` : accountCode,
+    note, items, total
+  };
+
+  const btn = document.getElementById('save-btn');
+  btn.innerHTML = '<span class="spinner"></span> กำลังบันทึก...';
+  btn.disabled = true;
+
+  try {
+    const res = await api('createVoucher', payload);
+    if (res.success) {
+      showToast('✅ บันทึกใบสำคัญสำเร็จ! เลขที่: ' + res.voucherId, 'success');
+      resetForm();
+      showPage('dashboard');
+    } else throw new Error(res.message);
+  } catch (e) {
+    showToast('❌ ' + e.message, 'error');
+  } finally {
+    btn.innerHTML = '💾 บันทึกใบสำคัญ';
+    btn.disabled = false;
+  }
+}
+
+function resetForm() {
+  const fromSel = document.getElementById('f-from-select');
+  if (fromSel) fromSel.value = '';
+  document.getElementById('f-account').value = '';
+  document.getElementById('f-note').value = '';
+  document.getElementById('items-tbody').innerHTML = '';
+  itemCount = 0;
+  addItem(); addItem();
+  calcTotal();
+  setDefaultDate();
+}
+
+function setRefFormat(fmt) {
+  refFormat = fmt;
+  const btnNormal = document.getElementById('ref-fmt-normal');
+  const btnTR     = document.getElementById('ref-fmt-tr');
+  const hint      = document.getElementById('ref-hint');
+  if (btnNormal) btnNormal.className = fmt === 'normal' ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
+  if (btnTR)     btnTR.className     = fmt === 'tr'     ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
+  if (hint) hint.textContent = fmt === 'tr'
+    ? 'TR: เดือน/ปี เช่น 12/2026 — แก้ไขได้'
+    : 'ปกติ: 001/เดือน/ปี — ห้ามซ้ำ แก้ไขได้';
+  generateRef();
+}
+
+function generateRef() {
+  const dateVal = document.getElementById('f-date') ? document.getElementById('f-date').value : '';
+  const d = dateVal ? new Date(dateVal + 'T00:00:00') : new Date();
+  const mm   = String(d.getMonth() + 1).padStart(2, '0');
+  const yy   = String(d.getFullYear()).slice(-2);
+  const el = document.getElementById('f-ref');
+  if (!el) return;
+  if (refFormat === 'tr') {
+    // TR: MM/YYYY เช่น 04/2026 — ซ้ำได้ต่างเดือน
+    const yyyy = d.getFullYear();
+    el.value = mm + '/' + yyyy;
+  } else {
+    const seq = getNextSeq();
+    el.value = seq + '/' + mm + '/' + yy;     // e.g. 001/04/26
+  }
+}
+
+function getNextSeq() {
+  let max = 0;
+  allVouchers.forEach(v => {
+    const ref = formatRef(v.voucherRef || '');
+    // only count normal format: NNN/MM/YY
+    const m = ref.match(/^(\d{1,4})\/\d{2}\/\d{2}$/);
+    if (m) max = Math.max(max, parseInt(m[1]));
+  });
+  return String(max + 1).padStart(3, '0');
+}
+
+// ======== ACCOUNTS ========
+async function loadAccounts() {
+  const wrap = document.getElementById('accounts-list-wrap');
+  if (!SCRIPT_URL) {
+    wrap.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div><p>กรุณาตั้งค่า Script URL ก่อน</p></div>';
+    return;
+  }
+  wrap.innerHTML = '<div class="empty-state"><div class="icon">⏳</div><p>กำลังโหลด...</p></div>';
+  try {
+    const res = await apiGet('getAccounts');
+    if (res.success) {
+      allAccounts = res.data || [];
+      renderAccountsTable(allAccounts);
+      populateAccountDropdown(allAccounts);
+    }
+  } catch (e) {
+    wrap.innerHTML = `<div class="empty-state"><div class="icon">❌</div><p>${e.message}</p></div>`;
+  }
+}
+
+function renderAccountsTable(data) {
+  const wrap = document.getElementById('accounts-list-wrap');
+  if (!data.length) {
+    wrap.innerHTML = '<div class="empty-state"><div class="icon">🏦</div><p>ยังไม่มีบัญชี</p></div>';
+    return;
+  }
+  const rows = data.map(a => `
+    <tr id="acc-row-${a.code}">
+      <td><strong>${a.bank}</strong></td>
+      <td id="acc-num-${a.code}">${a.number}</td>
+      <td>${a.bank} ${a.number}</td>
+      <td>
+        <div class="action-btns">
+          <button class="btn btn-outline btn-sm" onclick="editAccount('${a.code}','${a.bank}','${a.number}')">✏️ แก้ไข</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteAccount('${a.code}')">🗑 ลบ</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>ธนาคาร</th><th>เลขที่บัญชี</th><th>ป้ายกำกับ</th><th>จัดการ</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function populateAccountDropdown(data) {
+  const sel = document.getElementById('f-account');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— เลือกบัญชี —</option>';
+  data.forEach(a => {
+    const opt = document.createElement('option');
+    opt.value = a.code;
+    opt.textContent = `${a.bank} ${a.number}`;
+    if (a.code === cur) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  populateSourceAccountDropdown(data);
+}
+
+// ======== CUSTOMER ACCOUNTS ========
+async function loadCustomerAccounts() {
+  const wrap = document.getElementById('customer-accounts-list-wrap');
+  if (!SCRIPT_URL) {
+    if (wrap) wrap.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div><p>กรุณาตั้งค่า Script URL ก่อน</p></div>';
+    return;
+  }
+  if (wrap) wrap.innerHTML = '<div class="empty-state"><div class="icon">⏳</div><p>กำลังโหลด...</p></div>';
+  try {
+    const res = await apiGet('getCustomerAccounts');
+    if (res.success) {
+      allCustomerAccounts = res.data || [];
+      renderCustomerAccountsTable(allCustomerAccounts);
+      populateFromSelect(allCustomerAccounts);
+    }
+  } catch(e) {
+    if (wrap) wrap.innerHTML = `<div class="empty-state"><div class="icon">❌</div><p>${e.message}</p></div>`;
+  }
+}
+
+function renderCustomerAccountsTable(data) {
+  const wrap = document.getElementById('customer-accounts-list-wrap');
+  if (!wrap) return;
+  if (!data.length) {
+    wrap.innerHTML = '<div class="empty-state"><div class="icon">👤</div><p>ยังไม่มีบัญชีลูกค้า</p></div>';
+    return;
+  }
+  const rows = data.map(a => `
+    <tr>
+      <td><strong>${a.bank}</strong></td>
+      <td>${a.number}</td>
+      <td>${a.bank} ${a.number}</td>
+      <td>
+        <div class="action-btns">
+          <button class="btn btn-outline btn-sm" onclick="editCustomerAccount('${a.code}','${a.bank}','${a.number}')">✏️ แก้ไข</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteCustomerAccount('${a.code}')">🗑 ลบ</button>
+        </div>
+      </td>
+    </tr>`).join('');
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>ธนาคาร</th><th>เลขที่บัญชี</th><th>ป้ายกำกับ</th><th>จัดการ</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function populateFromSelect(data) {
+  const sel = document.getElementById('f-from-select');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— เลือกบัญชีลูกค้า —</option>';
+  data.forEach(a => {
+    const opt = document.createElement('option');
+    opt.value = a.code;
+    opt.textContent = `${a.bank} ${a.number}`;
+    if (a.code === cur) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+let editingCustomerCode = null;
+
+async function saveCustomerAccount() {
+  const bank = document.getElementById('cust-bank').value.trim();
+  const number = document.getElementById('cust-number').value.trim();
+  if (!bank || !number) { showToast('กรุณากรอกข้อมูลให้ครบ', 'error'); return; }
+  const code = (bank + '_' + number.replace(/-/g,'')).slice(0, 20);
+  const btn = document.querySelector('[onclick="saveCustomerAccount()"]');
+  if (btn) { btn.innerHTML = '<span class="spinner"></span> กำลังบันทึก...'; btn.disabled = true; }
+  try {
+    const res = await api('createCustomerAccount', { code, bank, number });
+    if (res.success) {
+      showToast('✅ เพิ่มบัญชีลูกค้าสำเร็จ', 'success');
+      document.getElementById('cust-bank').value = '';
+      document.getElementById('cust-number').value = '';
+      await loadCustomerAccounts();
+    } else throw new Error(res.message);
+  } catch(e) { showToast('❌ ' + e.message, 'error'); }
+  finally {
+    if (btn) { btn.innerHTML = '＋ เพิ่ม'; btn.disabled = false; }
+  }
+}
+
+function editCustomerAccount(code, bank, number) {
+  editingCustomerCode = code;
+  document.getElementById('cust-bank').value = bank;
+  document.getElementById('cust-number').value = number;
+  const btn = document.querySelector('[onclick="saveCustomerAccount()"]');
+  if (btn) { btn.textContent = '💾 บันทึก'; btn.onclick = updateCustomerAccount; }
+  window.scrollTo(0, 0);
+  showToast('กำลังแก้ไขบัญชี ' + bank, 'success');
+}
+
+async function updateCustomerAccount() {
+  const bank = document.getElementById('cust-bank').value.trim();
+  const number = document.getElementById('cust-number').value.trim();
+  if (!bank || !number) { showToast('กรุณากรอกข้อมูลให้ครบ', 'error'); return; }
+  const btn = document.querySelector('[onclick="updateCustomerAccount()"]');
+  if (btn) { btn.innerHTML = '<span class="spinner"></span> กำลังบันทึก...'; btn.disabled = true; }
+  try {
+    const res = await api('updateCustomerAccount', { code: editingCustomerCode, bank, number });
+    if (res.success) {
+      showToast('✅ แก้ไขบัญชีลูกค้าสำเร็จ', 'success');
+      editingCustomerCode = null;
+      document.getElementById('cust-bank').value = '';
+      document.getElementById('cust-number').value = '';
+      if (btn) { btn.textContent = '＋ เพิ่ม'; btn.onclick = saveCustomerAccount; btn.disabled = false; }
+      await loadCustomerAccounts();
+    } else throw new Error(res.message);
+  } catch(e) {
+    showToast('❌ ' + e.message, 'error');
+    if (btn) { btn.innerHTML = '💾 บันทึก'; btn.disabled = false; }
+  }
+}
+
+async function deleteCustomerAccount(code) {
+  if (!confirm('ยืนยันลบบัญชีลูกค้านี้?')) return;
+  try {
+    const res = await api('deleteCustomerAccount', { code });
+    if (res.success) { showToast('✅ ลบแล้ว', 'success'); loadCustomerAccounts(); }
+    else throw new Error(res.message);
+  } catch(e) { showToast('❌ ' + e.message, 'error'); }
+}
+
+async function saveAccount() {
+  const bank = document.getElementById('acc-bank').value.trim();
+  const number = document.getElementById('acc-number').value.trim();
+  if (!bank || !number) { showToast('กรุณากรอกข้อมูลให้ครบ', 'error'); return; }
+  const code = (bank + '_' + number.replace(/-/g,'')).slice(0, 20);
+  const btn = document.querySelector('[onclick="saveAccount()"]');
+  if (btn) { btn.innerHTML = '<span class="spinner"></span> กำลังบันทึก...'; btn.disabled = true; }
+  try {
+    const res = await api('createAccount', { code, bank, number });
+    if (res.success) {
+      showToast('✅ เพิ่มบัญชีสำเร็จ', 'success');
+      document.getElementById('acc-bank').value = '';
+      document.getElementById('acc-number').value = '';
+      await loadAccounts();
+    } else throw new Error(res.message);
+  } catch (e) { showToast('❌ ' + e.message, 'error'); }
+  finally {
+    if (btn) { btn.innerHTML = '＋ เพิ่ม'; btn.disabled = false; }
+  }
+}
+
+function formatAccNumber(input) {
+  let v = input.value.replace(/\D/g, '').slice(0, 10);
+  let out = '';
+  if (v.length > 0) out += v.slice(0,3);
+  if (v.length > 3) out += '-' + v.slice(3,4);
+  if (v.length > 4) out += '-' + v.slice(4,9);
+  if (v.length > 9) out += '-' + v.slice(9,10);
+  input.value = out;
+}
+
+function editAccount(code, bank, number) {
+  editingAccountCode = code;
+  document.getElementById('acc-bank').value = bank;
+  document.getElementById('acc-number').value = number;
+  const btn = document.querySelector('[onclick="saveAccount()"]');
+  if (btn) { btn.textContent = '💾 บันทึก'; btn.onclick = updateAccount; }
+  window.scrollTo(0,0);
+  showToast('กำลังแก้ไขบัญชี ' + bank, 'success');
+}
+
+async function updateAccount() {
+  const bank = document.getElementById('acc-bank').value.trim();
+  const number = document.getElementById('acc-number').value.trim();
+  if (!bank || !number) { showToast('กรุณากรอกข้อมูลให้ครบ', 'error'); return; }
+  const btn = document.querySelector('[onclick="updateAccount()"]');
+  if (btn) { btn.innerHTML = '<span class="spinner"></span> กำลังบันทึก...'; btn.disabled = true; }
+  try {
+    const res = await api('updateAccount', { code: editingAccountCode, bank, number });
+    if (res.success) {
+      showToast('✅ แก้ไขบัญชีสำเร็จ', 'success');
+      resetAccountForm();
+      await loadAccounts();
+    } else throw new Error(res.message);
+  } catch (e) { showToast('❌ ' + e.message, 'error'); }
+  finally {
+    if (btn) { btn.innerHTML = '💾 บันทึก'; btn.disabled = false; }
+  }
+}
+
+async function deleteAccount(code) {
+  if (!confirm('ยืนยันลบบัญชีนี้?')) return;
+  try {
+    const res = await api('deleteAccount', { code });
+    if (res.success) {
+      showToast('✅ ลบบัญชีแล้ว', 'success');
+      loadAccounts();
+    } else throw new Error(res.message);
+  } catch (e) { showToast('❌ ' + e.message, 'error'); }
+}
+
+function resetAccountForm() {
+  editingAccountCode = null;
+  document.getElementById('acc-bank').value = '';
+  document.getElementById('acc-number').value = '';
+  const btn = document.querySelector('[onclick="updateAccount()"]');
+  if (btn) { btn.textContent = '＋ เพิ่ม'; btn.onclick = saveAccount; }
+}
+function previewVoucher(v) {
+  const items = v.items || [];
+  // Normalize items: detect __TR__ prefix stored in description
+  const normalizedItems = items.map(it => {
+    if (it.type === 'tr') return it;
+    if (String(it.description || '').startsWith('__TR__')) {
+      return { type: 'tr', date: it.description.replace('__TR__', ''), description: '', amount: 0 };
+    }
+    return { type: 'normal', ...it };
+  });
+  const hasTRRows = normalizedItems.some(it => it.type === 'tr');
+
+  let itemRowsHtml = '';
+  if (hasTRRows) {
+    itemRowsHtml = normalizedItems.map(it => {
+      if (it.type === 'tr') {
+        const d = it.date ? new Date(it.date) : null;
+        const dateStr = d && !isNaN(d)
+          ? d.toLocaleDateString('th-TH', { day: 'numeric', month: 'numeric', year: 'numeric' })
+          : (it.date || '');
+        return `<tr style="background:#f5f5f5"><td colspan="2" style="font-weight:700;color:#1a1a1a;padding:6px 12px">${dateStr}</td><td></td></tr>`;
+      }
+      return `<tr><td>${it.description || ''}</td><td></td><td class="amt">${it.amount ? formatNumber(it.amount) : ''}</td></tr>`;
+    }).join('');
+    const normalCount = normalizedItems.filter(it => it.type !== 'tr').length;
+    const padCount = Math.max(0, 5 - normalCount);
+    itemRowsHtml += Array(padCount).fill('<tr><td>&nbsp;</td><td></td><td></td></tr>').join('');
+  } else {
+    itemRowsHtml = normalizedItems.map(it => `
+      <tr><td>${it.description || ''}</td><td class="amt">${it.amount ? formatNumber(it.amount) : ''}</td></tr>`
+    ).join('');
+    const padCount = Math.max(0, 5 - normalizedItems.length);
+    itemRowsHtml += Array(padCount).fill('<tr><td>&nbsp;</td><td></td></tr>').join('');
+  }
+
+  const tableHeader = hasTRRows
+    ? `<tr><th>รายการ</th><th></th><th>จำนวนเงิน</th></tr>`
+    : `<tr><th>รายการ</th><th>จำนวนเงิน</th></tr>`;
+  const totalColspan = hasTRRows ? 2 : 1;
+
+  document.getElementById('print-area').innerHTML = `
+    <div class="voucher-print">
+      <div class="v-header">
+        <div class="v-company-th">${COMPANY_TH}</div>
+        <div class="v-company-en">${COMPANY_EN}</div>
+        <div class="v-title">ใบสำคัญรับเงิน</div>
+      </div>
+      <div class="v-to-row">
+        <span>เรียน : ฝ่ายบัญชี ${COMPANY_TH}</span>
+        <span>${formatRef(v.voucherRef || v.voucherId || '')}</span>
+      </div>
+      <div class="v-meta"><strong>รายละเอียด :</strong></div>
+      <div class="v-meta"><strong>วันที่รับเงิน : ${formatDateTHFull(v.date)}</strong></div>
+      <div class="v-meta">รับจาก : ${v.receivedFrom}</div>
+      ${v.accountLabel ? `<div class="v-meta">เข้าบัญชี : ${v.accountLabel}</div>` : ''}
+      <table>
+        <thead>${tableHeader}</thead>
+        <tbody>
+          ${itemRowsHtml}
+          <tr class="v-total-row">
+            <td colspan="${totalColspan}" style="text-align:left">${bahtText(v.total)}</td>
+            <td class="amt">${formatNumber(v.total)}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="v-sigs">
+        <div class="v-sig-box"><span class="v-sig-label">ผู้ขอ</span><div class="v-sig-line"></div></div>
+        <div class="v-sig-box"><span class="v-sig-label">ผู้ตรวจสอบ</span><div class="v-sig-line"></div></div>
+        <div class="v-sig-box"><span class="v-sig-label">ผู้อนุมัติ</span><div class="v-sig-line"></div></div>
+      </div>
+    </div>
+  `;
+  document.getElementById('print-modal').classList.add('show');
+}
+
+function closePrintModal() {
+  document.getElementById('print-modal').classList.remove('show');
+}
+
+function printVoucher() {
+  window.print();
+}
+
+// ======== SETTINGS ========
+function saveSettings() {
+  SCRIPT_URL = document.getElementById('script-url-input').value.trim();
+  COMPANY_TH = document.getElementById('company-th-input').value.trim();
+  COMPANY_EN = document.getElementById('company-en-input').value.trim();
+  localStorage.setItem('scriptUrl', SCRIPT_URL);
+  localStorage.setItem('companyTh', COMPANY_TH);
+  localStorage.setItem('companyEn', COMPANY_EN);
+  updateSidebarCompany();
+  checkConfig();
+  showToast('✅ บันทึกการตั้งค่าแล้ว', 'success');
+  loadVouchers();
+  loadAccounts();
+}
+
+// ======== THAI BAHT TEXT ========
+function bahtText(amount) {
+  const num = parseFloat(amount) || 0;
+  const units  = ['', 'หนึ่ง', 'สอง', 'สาม', 'สี่', 'ห้า', 'หก', 'เจ็ด', 'แปด', 'เก้า'];
+  const places = ['', 'สิบ', 'ร้อย', 'พัน', 'หมื่น', 'แสน'];
+
+  function readGroup(n) {
+    if (n === 0) return '';
+    let result = '';
+    const s = String(n).padStart(6, '0').split('');
+    const hasTens = parseInt(s[4]) > 0;
+    s.forEach((d, i) => {
+      const di = parseInt(d);
+      const pos = 5 - i;
+      if (di === 0) return;
+      if (pos === 1 && di === 1) result += 'สิบ';
+      else if (pos === 1 && di === 2) result += 'ยี่สิบ';
+      else if (pos === 0 && di === 1 && hasTens) result += 'เอ็ด';
+      else result += units[di] + places[pos];
+    });
+    return result;
+  }
+
+  const absNum   = Math.abs(num);
+  const intPart  = Math.floor(absNum);
+  const fracPart = Math.round((absNum - intPart) * 100);
+
+  let text = '';
+  if (intPart === 0) {
+    text = 'ศูนย์บาท';
+  } else {
+    const millions = Math.floor(intPart / 1000000);
+    const remainder = intPart % 1000000;
+    if (millions > 0) text += readGroup(millions) + 'ล้าน';
+    if (remainder > 0) text += readGroup(remainder);
+    text += 'บาท';
+  }
+  text += fracPart > 0 ? readGroup(fracPart) + 'สตางค์' : 'ถ้วน';
+  if (num < 0) text = 'ลบ' + text;
+  return text;
+}
+function formatRef(val) {
+  if (!val) return '';
+  const s = String(val).trim();
+  // Already correct normal format: 001/04/26
+  if (/^\d{3}\/\d{2}\/\d{2}$/.test(s)) return s;
+  // Already correct TR format: 04/2026
+  if (/^\d{2}\/\d{4}$/.test(s)) return s;
+  // Sheets returned YYYY/MM/DD (e.g. 2001/04/26 from "001/04/26") → show as MM/YYYY
+  if (/^\d{4}\/\d{2}\/\d{2}$/.test(s)) {
+    const p = s.split('/');
+    return p[1] + '/' + p[0]; // 04/2001 → shows origin month/year
+  }
+  // ISO date string from Sheets → MM/YYYY
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s) || /^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const d = new Date(s);
+    if (!isNaN(d)) return String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
+  }
+  // MM/YYYY from Sheets date format
+  if (/^\d{2}\/\d{4}$/.test(s)) return s;
+  return s;
+}
+
+// ======== OPTIONS MANAGEMENT ========
+function renderOptionsPage() {
+  renderOptionTags('description', 'opt-description-list');
+}
+
+function renderOptionTags(key, containerId) {
+  const wrap = document.getElementById(containerId);
+  if (!wrap) return;
+  wrap.innerHTML = comboOptions[key].map((opt, i) => `
+    <span style="display:inline-flex;align-items:center;gap:6px;background:var(--cream);border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-size:13px">
+      ${opt}
+      <button onclick="removeOption('${key}',${i})" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:14px;line-height:1;padding:0">✕</button>
+    </span>
+  `).join('');
+}
+
+function addOption(key, inputId) {
+  const input = document.getElementById(inputId);
+  const val = input.value.trim();
+  if (!val) return;
+  if (!comboOptions[key].includes(val)) {
+    comboOptions[key].push(val);
+    saveComboOptions(key);
+    if (key === 'description') refreshAllItemSelects();
+  }
+  input.value = '';
+  renderOptionsPage();
+  showToast('✅ เพิ่มตัวเลือก "' + val + '" แล้ว', 'success');
+}
+
+function removeOption(key, index) {
+  const val = comboOptions[key][index];
+  if (!confirm('ลบ "' + val + '" ?')) return;
+  comboOptions[key].splice(index, 1);
+  saveComboOptions(key);
+  if (key === 'description') refreshAllItemSelects();
+  renderOptionsPage();
+  showToast('ลบตัวเลือกแล้ว', 'success');
+}
+
+function formatNumber(n) {
+  return parseFloat(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function formatDateTH(d) {
+  if (!d) return '';
+  try {
+    const dt = new Date(d);
+    return dt.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  } catch { return d; }
+}
+
+function formatDateTHFull(d) {
+  if (!d) return '';
+  try {
+    const dt = new Date(d);
+    return dt.toLocaleDateString('th-TH', { day: 'numeric', month: 'numeric', year: 'numeric' });
+  } catch { return d; }
+}
+
+function showToast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-msg').textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 4000);
+}
+
+function setSyncStatus(msg) {
+  document.getElementById('sync-status').textContent = msg;
+}
+</script>
+</body>
+</html>
