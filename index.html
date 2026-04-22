@@ -1479,6 +1479,9 @@ async function saveVoucher() {
     note, items, total
   };
 
+  console.log("ส่ง ref:", ref);
+  console.log("ส่ง items:", items);
+  
   const btn = document.getElementById('save-btn');
   btn.innerHTML = '<span class="spinner"></span> กำลังบันทึก...';
   btn.disabled = true;
