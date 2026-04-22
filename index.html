@@ -1448,27 +1448,27 @@ async function saveVoucher() {
   if (emptyAmt) { showToast('กรุณากรอกจำนวนเงินให้ครบทุกแถว', 'error'); return; }
 
 // ห้ามซ้ำ: normal ห้ามซ้ำทุกกรณี, TR ห้ามซ้ำในเดือนเดียวกัน
-// เช็ค duplicate เฉพาะ ref แบบปกติ (TR ซ้ำเดือนเดียวกันได้)
-  if (ref) {
-    const refNorm = ref.trim().toLowerCase();
-    const isTRRef = /^\d{2}\/\d{4}$/.test(ref.trim());
-    if (!isTRRef) {
-      const duplicate = allVouchers.find(v => {
-        const rawRef = String(v.voucherRef || '').trim().toLowerCase();
-        const fmtRef = formatRef(v.voucherRef || '').trim().toLowerCase();
-        return rawRef === refNorm || fmtRef === refNorm;
-      });
-      if (duplicate) {
-        showToast('❌ เลขที่ "' + ref + '" ซ้ำกับรายการที่มีอยู่แล้ว กรุณาแก้ไข', 'error');
-        const refEl = document.getElementById('f-ref');
-        refEl.style.borderColor = 'var(--red)';
-        refEl.style.boxShadow = '0 0 0 3px rgba(192,57,43,0.15)';
-        refEl.focus(); refEl.select();
-        setTimeout(() => { refEl.style.borderColor = ''; refEl.style.boxShadow = ''; }, 3000);
-        return;
-      }
-    }
-  }
+// // เช็ค duplicate เฉพาะ ref แบบปกติ (TR ซ้ำเดือนเดียวกันได้)
+//   if (ref) {
+//     const refNorm = ref.trim().toLowerCase();
+//     const isTRRef = /^\d{2}\/\d{4}$/.test(ref.trim());
+//     if (!isTRRef) {
+//       const duplicate = allVouchers.find(v => {
+//         const rawRef = String(v.voucherRef || '').trim().toLowerCase();
+//         const fmtRef = formatRef(v.voucherRef || '').trim().toLowerCase();
+//         return rawRef === refNorm || fmtRef === refNorm;
+//       });
+//       if (duplicate) {
+//         showToast('❌ เลขที่ "' + ref + '" ซ้ำกับรายการที่มีอยู่แล้ว กรุณาแก้ไข', 'error');
+//         const refEl = document.getElementById('f-ref');
+//         refEl.style.borderColor = 'var(--red)';
+//         refEl.style.boxShadow = '0 0 0 3px rgba(192,57,43,0.15)';
+//         refEl.focus(); refEl.select();
+//         setTimeout(() => { refEl.style.borderColor = ''; refEl.style.boxShadow = ''; }, 3000);
+//         return;
+//       }
+//     }
+//   }
 
   const account = allAccounts.find(a => a.code === accountCode);
   const total = items.reduce((s, i) => s + i.amount, 0);
