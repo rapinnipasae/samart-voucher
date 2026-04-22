@@ -1451,22 +1451,21 @@ async function saveVoucher() {
   if (ref) {
     const refNorm = ref.trim().toLowerCase();
     const isTRRef = /^\d{2}\/\d{4}$/.test(ref.trim());
-    const duplicate = allVouchers.find(v => {
-      const r = formatRef(v.voucherRef || '').trim().toLowerCase();
-      if (isTRRef) return r === refNorm; // TR: ห้ามซ้ำ ref เดียวกัน (เดือน/ปีเดียวกัน)
-      return r === refNorm;
-    });
-    if (duplicate) {
-      const msg = isTRRef
-        ? '❌ เลขที่ TR "' + ref + '" ซ้ำในเดือนนี้ กรุณาตรวจสอบ'
-        : '❌ เลขที่ "' + ref + '" ซ้ำกับรายการที่มีอยู่แล้ว กรุณาแก้ไข';
-      showToast(msg, 'error');
-      const refEl = document.getElementById('f-ref');
-      refEl.style.borderColor = 'var(--red)';
-      refEl.style.boxShadow = '0 0 0 3px rgba(192,57,43,0.15)';
-      refEl.focus(); refEl.select();
-      setTimeout(() => { refEl.style.borderColor = ''; refEl.style.boxShadow = ''; }, 3000);
-      return;
+    if (!isTRRef) {
+      const duplicate = allVouchers.find(v => {
+        const rawRef = String(v.voucherRef || '').trim().toLowerCase();
+        const fmtRef = formatRef(v.voucherRef || '').trim().toLowerCase();
+        return rawRef === refNorm || fmtRef === refNorm;
+      });
+      if (duplicate) {
+        showToast('❌ เลขที่ "' + ref + '" ซ้ำกับรายการที่มีอยู่แล้ว กรุณาแก้ไข', 'error');
+        const refEl = document.getElementById('f-ref');
+        refEl.style.borderColor = 'var(--red)';
+        refEl.style.boxShadow = '0 0 0 3px rgba(192,57,43,0.15)';
+        refEl.focus(); refEl.select();
+        setTimeout(() => { refEl.style.borderColor = ''; refEl.style.boxShadow = ''; }, 3000);
+        return;
+      }
     }
   }
 
