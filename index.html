@@ -1447,7 +1447,8 @@ async function saveVoucher() {
   const emptyAmt = normalItems.find(it => it.amount === null || it.amount === undefined || it.amount === '' || isNaN(Number(it.amount)));
   if (emptyAmt) { showToast('กรุณากรอกจำนวนเงินให้ครบทุกแถว', 'error'); return; }
 
-  // ห้ามซ้ำ: normal ห้ามซ้ำทุกกรณี, TR ห้ามซ้ำในเดือนเดียวกัน
+// ห้ามซ้ำ: normal ห้ามซ้ำทุกกรณี, TR ห้ามซ้ำในเดือนเดียวกัน
+// เช็ค duplicate เฉพาะ ref แบบปกติ (TR ซ้ำเดือนเดียวกันได้)
   if (ref) {
     const refNorm = ref.trim().toLowerCase();
     const isTRRef = /^\d{2}\/\d{4}$/.test(ref.trim());
