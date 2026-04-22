@@ -1535,26 +1535,25 @@ function generateRef() {
   const el = document.getElementById('f-ref');
   if (!el) return;
   if (refFormat === 'tr') {
-    // TR: MM/YYYY — หา month ถัดจาก TR ref สูงสุดใน allVouchers
     const yyyy = d.getFullYear();
-    const nextTR = getNextTRRef(mm, yyyy);
-    el.value = nextTR;
+    // ✅ ส่ง mm ของวันที่ที่เลือก ไม่ใช่คำนวณ next
+    el.value = mm + '/' + yyyy;
   } else {
     const seq = getNextSeq();
-    el.value = seq + '/' + mm + '/' + yy;     // e.g. 001/04/26
+    el.value = seq + '/' + mm + '/' + yy;
   }
 }
 
-function getNextSeq() {
-  let max = 0;
-  allVouchers.forEach(v => {
-    const ref = formatRef(v.voucherRef || '');
-    // only count normal format: NNN/MM/YY
-    const m = ref.match(/^(\d{1,4})\/\d{2}\/\d{2}$/);
-    if (m) max = Math.max(max, parseInt(m[1]));
-  });
-  return String(max + 1).padStart(3, '0');
-}
+// function getNextSeq() {
+//   let max = 0;
+//   allVouchers.forEach(v => {
+//     const ref = formatRef(v.voucherRef || '');
+//     // only count normal format: NNN/MM/YY
+//     const m = ref.match(/^(\d{1,4})\/\d{2}\/\d{2}$/);
+//     if (m) max = Math.max(max, parseInt(m[1]));
+//   });
+//   return String(max + 1).padStart(3, '0');
+// }
 
 function getNextTRRef(mm, yyyy) {
   // หา TR refs ทั้งหมดในปีเดียวกัน pattern: MM/YYYY
